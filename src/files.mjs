@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 export async function ensureDir(dirPath) {
@@ -14,6 +14,14 @@ export async function writeJson(filePath, value) {
 export async function writeText(filePath, value) {
   await ensureDir(path.dirname(filePath));
   await writeFile(filePath, value, "utf8");
+}
+
+export async function readJson(filePath) {
+  return JSON.parse(await readFile(filePath, "utf8"));
+}
+
+export async function deleteFile(filePath) {
+  await unlink(filePath).catch(() => {});
 }
 
 export function buildRunId(now = new Date()) {

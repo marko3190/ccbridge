@@ -4,7 +4,11 @@ import path from "node:path";
 import process from "node:process";
 import { access, readFile } from "node:fs/promises";
 import { loadConfig } from "./config.mjs";
-import { runOrchestration } from "./orchestrator.mjs";
+import {
+  answerAndResumeRun,
+  resumeRun,
+  runOrchestration
+} from "./orchestrator.mjs";
 import { formatPreflightReport, runPreflight } from "./preflight.mjs";
 import { getPresetNames, getPresetSummaries } from "./presets.mjs";
 
@@ -15,6 +19,8 @@ function printHelp() {
     "  ccbridge run --task-file <path>",
     "  ccbridge doctor",
     "  ccbridge presets",
+    "  ccbridge answer --run <runId|runDir> --answers '<json>'",
+    "  ccbridge resume --run <runId|runDir>",
     "",
     "Options:",
     "  --config <path>        Path to ccbridge config JSON. Optional if a preset is enough.",
@@ -26,6 +32,9 @@ function printHelp() {
     "  --max-rounds <n>       Override maxPlanRounds from config.",
     "  --max-review-rounds <n> Override maxReviewRounds from config.",
     "  --skip-preflight       Skip auth and binary checks before run.",
+    "  --run <runId|runDir>   Run directory or run id for answer/resume.",
+    "  --answers <json>       Inline JSON answers map for ccbridge answer.",
+    "  --answers-file <path>  File containing a JSON answers map for ccbridge answer.",
     "  -h, --help             Show this help."
   ];
 
@@ -36,6 +45,12 @@ function parseArgs(argv) {
   const args = {
     command: argv[2]
   };
+
+  if (args.command === "-h" || args.command === "--help") {
+    args.help = true;
+    args.command = null;
+    return args;
+  }
 
   for (let index = 3; index < argv.length; index += 1) {
     const current = argv[index];
@@ -77,6 +92,18 @@ function parseArgs(argv) {
       case "--skip-preflight":
         args.skipPreflight = true;
         break;
+      case "--run":
+        args.run = next;
+        index += 1;
+        break;
+      case "--answers":
+        args.answers = next;
+        index += 1;
+        break;
+      case "--answers-file":
+        args.answersFile = next;
+        index += 1;
+        break;
       case "-h":
       case "--help":
         args.help = true;
@@ -102,6 +129,18 @@ async function resolveTask(args) {
   throw new Error("Provide either --task or --task-file.");
 }
 
+async function resolveAnswers(args) {
+  if (args.answers) {
+    return JSON.parse(args.answers);
+  }
+
+  if (args.answersFile) {
+    return JSON.parse(await readFile(path.resolve(args.answersFile), "utf8"));
+  }
+
+  throw new Error("Provide either --answers or --answers-file.");
+}
+
 async function resolveConfigPath(configPath) {
   if (configPath) {
     return configPath;
@@ -120,6 +159,26 @@ async function resolveConfigPath(configPath) {
   } catch {}
 
   return null;
+}
+
+async function resolveRunPath(runArg) {
+  if (!runArg) {
+    throw new Error("Missing required --run option.");
+  }
+
+  const directPath = path.resolve(runArg);
+  try {
+    await access(directPath);
+    return directPath;
+  } catch {}
+
+  const defaultRunPath = path.resolve(process.cwd(), ".runs", runArg);
+  try {
+    await access(defaultRunPath);
+    return defaultRunPath;
+  } catch {}
+
+  throw new Error(`Could not resolve run path from: ${runArg}`);
 }
 
 function printPresets() {
@@ -143,12 +202,29 @@ async function main() {
     return;
   }
 
-  if (!["run", "doctor", "presets"].includes(args.command)) {
+  if (!["run", "doctor", "presets", "answer", "resume"].includes(args.command)) {
     throw new Error(`Unsupported command: ${args.command}`);
   }
 
   if (args.command === "presets") {
     printPresets();
+    return;
+  }
+
+  if (args.command === "answer") {
+    const runPath = await resolveRunPath(args.run);
+    const summary = await answerAndResumeRun({
+      runPath,
+      answers: await resolveAnswers(args)
+    });
+    process.stdout.write(`${JSON.stringify(summary, null, 2)}\n`);
+    return;
+  }
+
+  if (args.command === "resume") {
+    const runPath = await resolveRunPath(args.run);
+    const summary = await resumeRun({ runPath });
+    process.stdout.write(`${JSON.stringify(summary, null, 2)}\n`);
     return;
   }
 

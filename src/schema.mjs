@@ -44,6 +44,64 @@ export const reviewFindingSchema = {
   }
 };
 
+export const inputOptionSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["id", "label"],
+  properties: {
+    id: { type: "string" },
+    label: { type: "string" },
+    description: { type: "string" }
+  }
+};
+
+export const inputQuestionSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["id", "prompt", "input_kind", "answer_source"],
+  properties: {
+    id: { type: "string" },
+    prompt: { type: "string" },
+    input_kind: { enum: ["text", "single_select", "multi_select"] },
+    answer_source: { enum: ["human"] },
+    reason: { type: "string" },
+    placeholder: { type: "string" },
+    required: { type: "boolean" },
+    min_select: { type: "integer", minimum: 0 },
+    max_select: { type: "integer", minimum: 1 },
+    options: {
+      type: "array",
+      items: inputOptionSchema
+    }
+  }
+};
+
+export const inputRequestSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["summary", "questions"],
+  properties: {
+    summary: { type: "string" },
+    questions: {
+      type: "array",
+      minItems: 1,
+      items: inputQuestionSchema
+    }
+  }
+};
+
+export const inputAnswerValueSchema = {
+  oneOf: [
+    { type: "string" },
+    { type: "array", items: { type: "string" } }
+  ]
+};
+
+export const answerMapSchema = {
+  type: "object",
+  additionalProperties: inputAnswerValueSchema
+};
+
 export const planSchema = {
   type: "object",
   additionalProperties: false,
@@ -181,9 +239,22 @@ export const reviewSchema = {
   }
 };
 
+function wrapOperationSchema(resultSchema) {
+  return {
+    type: "object",
+    additionalProperties: false,
+    required: ["response_type"],
+    properties: {
+      response_type: { enum: ["result", "needs_input"] },
+      result: resultSchema,
+      input_request: inputRequestSchema
+    }
+  };
+}
+
 export const schemasByOperation = {
-  plan: planSchema,
-  critique: critiqueSchema,
-  execute: executionSchema,
-  review: reviewSchema
+  plan: wrapOperationSchema(planSchema),
+  critique: wrapOperationSchema(critiqueSchema),
+  execute: wrapOperationSchema(executionSchema),
+  review: wrapOperationSchema(reviewSchema)
 };

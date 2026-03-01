@@ -153,6 +153,52 @@ Without `npm link`, use the same commands through `npm start --`, for example:
 npm start -- run --preset balanced --workspace /absolute/path/to/repo --task-file ./task.md
 ```
 
+## When an agent needs input
+
+If an agent cannot proceed without a user decision, the run pauses instead of hanging in an interactive terminal flow. `ccbridge run` returns a summary like:
+
+```json
+{
+  "status": "waiting_for_user",
+  "runId": "2026-03-01T20-00-00.000Z",
+  "waitingStage": "execute",
+  "waitingRole": "executor",
+  "pendingInputFile": "/absolute/path/to/.runs/<runId>/pending-input.json"
+}
+```
+
+The pending questions are written to `pending-input.json` and `input-N.request.json` inside the run directory.
+
+Answer them with inline JSON:
+
+```bash
+ccbridge answer \
+  --run 2026-03-01T20-00-00.000Z \
+  --answers '{"allowed_scopes":["docs","tests"]}'
+```
+
+Or from a file:
+
+```bash
+ccbridge answer \
+  --run /absolute/path/to/.runs/2026-03-01T20-00-00.000Z \
+  --answers-file ./answers.json
+```
+
+Supported answer shapes:
+
+- `text`: `"question_id": "free-form answer"`
+- `single_select`: `"question_id": "option_id"`
+- `multi_select`: `"question_id": ["option_a", "option_b"]`
+
+If a run was interrupted after input was already provided, resume it with:
+
+```bash
+ccbridge resume --run 2026-03-01T20-00-00.000Z
+```
+
+Current behavior is human handoff only: when an agent asks for clarification, `ccbridge` pauses and expects a human answer rather than delegating the decision to the other agent.
+
 ## Notes
 
 - `planner` and `critic` exchange structured JSON, not free-form prose.
@@ -190,6 +236,9 @@ Every run writes artifacts to `<artifactsDir>/<timestamp>/` (default: `.runs/<ti
 | `execution.json` | Latest execution (overwritten each round) |
 | `review.round-N.json` | Each review round |
 | `review.json` | Latest review (overwritten each round) |
+| `pending-input.json` | Only while the run is waiting for user input |
+| `input-N.request.json` | Each structured input request from an agent |
+| `input-N.answer.json` | Each answer captured by `ccbridge answer` |
 | `summary.json` | On plan rejection or after review loop completes (not written on provider command failures) |
 
 The `raw/` subdirectory holds per-agent CLI logs. Two categories:
@@ -203,6 +252,26 @@ The `raw/` subdirectory holds per-agent CLI logs. Two categories:
 - `<role>-<operation>.result.json` — structured output written by `codex --output-last-message`
 
 Claude runs do not create `.schema.json` or `.result.json` files.
+
+### Run stopped with `waiting_for_user`
+
+This means an agent returned a structured input request instead of trying to use an interactive terminal prompt. Inspect:
+
+```bash
+cat .runs/<runId>/pending-input.json
+```
+
+Then answer it with:
+
+```bash
+ccbridge answer --run <runId> --answers '{"question_id":"value"}'
+```
+
+If you already answered the questions and the process was interrupted, continue with:
+
+```bash
+ccbridge resume --run <runId>
+```
 
 ### Binary not found (ENOENT)
 

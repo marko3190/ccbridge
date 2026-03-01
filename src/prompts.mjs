@@ -61,12 +61,45 @@ function summarizeReviewHistory(reviewHistory = []) {
     .join("\n\n");
 }
 
+function summarizeInputHistory(inputHistory = []) {
+  if (!inputHistory.length) {
+    return "No prior user input.";
+  }
+
+  return inputHistory
+    .map((entry) => {
+      const answers = Object.entries(entry.answers ?? {})
+        .map(([id, value]) => `- ${id}: ${Array.isArray(value) ? value.join(", ") : value}`)
+        .join("\n");
+
+      return [
+        `Stage: ${entry.stage}`,
+        `Role: ${entry.role_name}`,
+        `Summary: ${entry.summary}`,
+        "Answers:",
+        answers || "- None."
+      ].join("\n");
+    })
+    .join("\n\n");
+}
+
+function buildInputProtocolInstructions() {
+  return [
+    "If you are truly blocked on a human decision, do not ask in free-form prose and do not simulate an interactive terminal choice.",
+    "Instead return a JSON envelope with response_type='needs_input' and an input_request object.",
+    "Use input_kind='single_select' for one choice, input_kind='multi_select' for checkbox-style multiple choice, and input_kind='text' for free text.",
+    "Keep questions minimal and only ask what is necessary to continue safely.",
+    "If you can infer the answer from the repository, the task, or prior user answers, do not ask."
+  ].join("\n");
+}
+
 export function buildPlanPrompt({
   task,
   workspaceDir,
   previousPlan,
   critique,
   critiqueHistory,
+  inputHistory,
   round,
   maxPlanRounds
 }) {
@@ -81,6 +114,7 @@ export function buildPlanPrompt({
     "Always populate revision_notes. On round 1 use an empty array. On later rounds include one entry for every blocking issue from the latest critique, reusing the exact issue_id and explaining how it was addressed or why it was deferred.",
     "If a prior blocker should become non-blocking, say so explicitly in revision_notes and keep the plan focused on the primary task.",
     "If critique is supplied, revise the previous plan instead of replacing the task with a brand new approach.",
+    buildInputProtocolInstructions(),
     "Return JSON only that matches the provided schema."
   ].join("\n");
 
@@ -111,6 +145,10 @@ export function buildPlanPrompt({
     blocks.push(section("Critique history", summarizeCritiqueHistory(critiqueHistory)));
   }
 
+  if (inputHistory?.length) {
+    blocks.push(section("Resolved user input", summarizeInputHistory(inputHistory)));
+  }
+
   return blocks.join("\n\n");
 }
 
@@ -120,7 +158,8 @@ export function buildCritiquePrompt({
   plan,
   round,
   maxPlanRounds,
-  critiqueHistory
+  critiqueHistory,
+  inputHistory
 }) {
   const instructions = [
     "You are the critic agent in a multi-agent coding orchestrator.",
@@ -133,6 +172,7 @@ export function buildCritiquePrompt({
     "If the planner addressed a previous blocking issue well enough, do not reopen it with a renamed variant.",
     "Prefer reusing existing issue ids when the same blocker persists.",
     "If the plan is implementable and the remaining concerns are survivable or reviewable later, approve it and move those concerns to non_blocking_issues.",
+    buildInputProtocolInstructions(),
     "Return JSON only that matches the provided schema."
   ];
 
@@ -168,6 +208,9 @@ export function buildCritiquePrompt({
     critiqueHistory?.length
       ? section("Prior critique history", summarizeCritiqueHistory(critiqueHistory))
       : section("Prior critique history", "No prior critiques."),
+    inputHistory?.length
+      ? section("Resolved user input", summarizeInputHistory(inputHistory))
+      : section("Resolved user input", "No prior user input."),
     section("Plan under review", json(plan))
   ].join("\n\n");
 }
@@ -180,7 +223,8 @@ export function buildExecutionPrompt({
   maxReviewRounds,
   latestReview,
   reviewHistory,
-  latestExecution
+  latestExecution,
+  inputHistory
 }) {
   const instructions = [
     "You are the executor agent in a multi-agent coding orchestrator.",
@@ -190,6 +234,7 @@ export function buildExecutionPrompt({
     "If you must deviate from the plan, record the deviation in the JSON response.",
     "If review feedback is supplied, fix the blocking findings with the smallest safe change set instead of rewriting completed work.",
     "Treat non-blocking findings as optional unless they naturally fit into the repair.",
+    buildInputProtocolInstructions(),
     "Return JSON only that matches the provided schema."
   ];
 
@@ -226,6 +271,10 @@ export function buildExecutionPrompt({
     sections.push(section("Review history", summarizeReviewHistory(reviewHistory)));
   }
 
+  if (inputHistory?.length) {
+    sections.push(section("Resolved user input", summarizeInputHistory(inputHistory)));
+  }
+
   return sections.join("\n\n");
 }
 
@@ -236,7 +285,8 @@ export function buildReviewPrompt({
   execution,
   reviewRound,
   maxReviewRounds,
-  reviewHistory
+  reviewHistory,
+  inputHistory
 }) {
   const instructions = [
     "You are the reviewer agent in a multi-agent coding orchestrator.",
@@ -245,6 +295,7 @@ export function buildReviewPrompt({
     "Ignore nits unless they materially impact correctness or maintainability.",
     "If a prior blocking finding has been fixed, do not reopen it under a new label.",
     "Use blocking findings only for issues that should be fixed before considering the task complete.",
+    buildInputProtocolInstructions(),
     "Return JSON only that matches the provided schema."
   ];
 
@@ -275,6 +326,10 @@ export function buildReviewPrompt({
 
   if (reviewHistory?.length) {
     sections.push(section("Prior review history", summarizeReviewHistory(reviewHistory)));
+  }
+
+  if (inputHistory?.length) {
+    sections.push(section("Resolved user input", summarizeInputHistory(inputHistory)));
   }
 
   return sections.join("\n\n");

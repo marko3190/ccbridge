@@ -4,7 +4,7 @@ import { mkdtemp, readFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { loadConfig } from "../src/config.mjs";
-import { runOrchestration } from "../src/orchestrator.mjs";
+import { answerAndResumeRun, loadRunState, runOrchestration } from "../src/orchestrator.mjs";
 import { buildCritiquePrompt, buildPlanPrompt, buildReviewPrompt } from "../src/prompts.mjs";
 
 function createMockConfig(baseDir) {
@@ -61,6 +61,39 @@ test("runOrchestration performs a repair round after review changes requested", 
 
   assert.equal(reviewRound1.verdict, "changes_requested");
   assert.equal(reviewRound2.verdict, "pass");
+});
+
+test("runOrchestration can pause for user input and resume after multi-select answers", async () => {
+  const baseDir = await mkdtemp(path.join(os.tmpdir(), "ccbridge-input-"));
+  const config = createMockConfig(baseDir);
+  config.roles.executor = { provider: "mock", behavior: "needs_input_once" };
+
+  const waitingSummary = await runOrchestration({
+    config,
+    task: "Exercise the user input pause and resume flow."
+  });
+
+  assert.equal(waitingSummary.status, "waiting_for_user");
+  assert.equal(waitingSummary.waitingStage, "execute");
+  assert.equal(waitingSummary.questions[0].input_kind, "multi_select");
+
+  const stateBeforeAnswer = await loadRunState(waitingSummary.runDir);
+  assert.equal(stateBeforeAnswer.pendingInput.questions[0].id, "allowed_scopes");
+
+  const finalSummary = await answerAndResumeRun({
+    runPath: waitingSummary.runDir,
+    answers: {
+      allowed_scopes: ["docs"]
+    }
+  });
+
+  assert.equal(finalSummary.status, "completed");
+  assert.equal(finalSummary.reviewVerdict, "pass");
+
+  const answerArtifact = JSON.parse(
+    await readFile(path.join(waitingSummary.runDir, "input-1.answer.json"), "utf8")
+  );
+  assert.deepEqual(answerArtifact.answers.allowed_scopes, ["docs"]);
 });
 
 test("plan prompt asks for explicit revision notes and includes critique history", () => {

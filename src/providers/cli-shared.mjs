@@ -60,6 +60,13 @@ export function parseStructuredOutput(rawText) {
       return parsed.structured_output;
     }
 
+    if (
+      parsed.response_type === "result" ||
+      parsed.response_type === "needs_input"
+    ) {
+      return parsed;
+    }
+
     if (typeof parsed.result === "string") {
       return extractJson(parsed.result);
     }

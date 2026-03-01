@@ -11,16 +11,46 @@ export class MockProvider {
   async run({ operation, payload }) {
     switch (operation) {
       case "plan":
-        return this.#plan(payload);
+        return this.#wrapResult(this.#plan(payload));
       case "critique":
-        return this.#critique(payload);
+        return this.#wrapResult(this.#critique(payload));
       case "execute":
-        return this.#execute(payload);
+        if (this.behavior === "needs_input_once" && !payload.inputHistory?.length) {
+          return {
+            response_type: "needs_input",
+            input_request: {
+              summary: "Need one user decision before continuing.",
+              questions: [
+                {
+                  id: "allowed_scopes",
+                  prompt: "Which scopes are allowed for this change?",
+                  input_kind: "multi_select",
+                  answer_source: "human",
+                  required: true,
+                  min_select: 1,
+                  max_select: 2,
+                  options: [
+                    { id: "docs", label: "Docs only" },
+                    { id: "tests", label: "Tests allowed" }
+                  ]
+                }
+              ]
+            }
+          };
+        }
+        return this.#wrapResult(this.#execute(payload));
       case "review":
-        return this.#review(payload);
+        return this.#wrapResult(this.#review(payload));
       default:
         throw new Error(`Unsupported mock operation: ${operation}`);
     }
+  }
+
+  #wrapResult(result) {
+    return {
+      response_type: "result",
+      result
+    };
   }
 
   #plan(payload) {
