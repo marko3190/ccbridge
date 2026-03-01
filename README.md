@@ -92,6 +92,15 @@ npm start -- run \
   --task-file ./task.md
 ```
 
+## Docs
+
+Additional documentation:
+
+- [Architecture](./docs/architecture.md)
+- [Security Model](./docs/security-model.md)
+- [First Run Example](./docs/examples/first-run.md)
+- [Releasing](./RELEASING.md)
+
 ## What A Run Looks Like
 
 1. The planner proposes a structured plan.
