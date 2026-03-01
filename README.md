@@ -98,7 +98,7 @@ Additional documentation:
 
 - [Architecture](./docs/architecture.md)
 - [Security Model](./docs/security-model.md)
-- [First Run Example](./docs/examples/first-run.md)
+- [First Run Guide](./docs/guides/first-run.md)
 - [Releasing](./RELEASING.md)
 
 ## What A Run Looks Like
