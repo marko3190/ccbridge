@@ -209,6 +209,17 @@ test("loadConfig can build a runnable config from a preset without a config file
   assert.equal(config.workspaceDir, "/tmp/demo-workspace");
 });
 
+test("balanced preset gives Claude executor non-interactive validation permissions", async () => {
+  const config = await loadConfig(null, {
+    preset: "balanced",
+    workspaceDir: "/tmp/demo-workspace"
+  });
+
+  assert.equal(config.roles.executor.provider, "claude-cli");
+  assert.equal(config.roles.executor.permissionMode, "bypassPermissions");
+  assert.equal(config.roles.executor.dangerouslySkipPermissions, true);
+});
+
 test("review prompt marks the final allowed review pass correctly", () => {
   const prompt = buildReviewPrompt({
     task: "Finalize the change set.",

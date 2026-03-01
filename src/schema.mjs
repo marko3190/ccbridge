@@ -1,3 +1,9 @@
+function nullable(schema) {
+  return {
+    anyOf: [schema, { type: "null" }]
+  };
+}
+
 export const issueSchema = {
   type: "object",
   additionalProperties: false,
@@ -47,32 +53,43 @@ export const reviewFindingSchema = {
 export const inputOptionSchema = {
   type: "object",
   additionalProperties: false,
-  required: ["id", "label"],
+  required: ["id", "label", "description"],
   properties: {
     id: { type: "string" },
     label: { type: "string" },
-    description: { type: "string" }
+    description: nullable({ type: "string" })
   }
 };
 
 export const inputQuestionSchema = {
   type: "object",
   additionalProperties: false,
-  required: ["id", "prompt", "input_kind", "answer_source"],
+  required: [
+    "id",
+    "prompt",
+    "input_kind",
+    "answer_source",
+    "reason",
+    "placeholder",
+    "required",
+    "min_select",
+    "max_select",
+    "options"
+  ],
   properties: {
     id: { type: "string" },
     prompt: { type: "string" },
     input_kind: { enum: ["text", "single_select", "multi_select"] },
     answer_source: { enum: ["human"] },
-    reason: { type: "string" },
-    placeholder: { type: "string" },
+    reason: nullable({ type: "string" }),
+    placeholder: nullable({ type: "string" }),
     required: { type: "boolean" },
-    min_select: { type: "integer", minimum: 0 },
-    max_select: { type: "integer", minimum: 1 },
-    options: {
+    min_select: nullable({ type: "integer", minimum: 0 }),
+    max_select: nullable({ type: "integer", minimum: 1 }),
+    options: nullable({
       type: "array",
       items: inputOptionSchema
-    }
+    })
   }
 };
 
@@ -243,11 +260,11 @@ function wrapOperationSchema(resultSchema) {
   return {
     type: "object",
     additionalProperties: false,
-    required: ["response_type"],
+    required: ["response_type", "result", "input_request"],
     properties: {
       response_type: { enum: ["result", "needs_input"] },
-      result: resultSchema,
-      input_request: inputRequestSchema
+      result: nullable(resultSchema),
+      input_request: nullable(inputRequestSchema)
     }
   };
 }

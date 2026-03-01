@@ -20,7 +20,8 @@ const presetDefinitions = {
       executor: {
         provider: "claude-cli",
         model: "sonnet",
-        permissionMode: "acceptEdits"
+        permissionMode: "bypassPermissions",
+        dangerouslySkipPermissions: true
       },
       reviewer: {
         provider: "codex-cli",

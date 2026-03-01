@@ -1,11 +1,17 @@
 #!/usr/bin/env node
 
+import { spawn } from "node:child_process";
 import path from "node:path";
 import process from "node:process";
 import { access, readFile } from "node:fs/promises";
+import {
+  promptForAnswersInteractively,
+  renderWaitingForUserHint
+} from "./answer-ui.mjs";
 import { loadConfig } from "./config.mjs";
 import {
   answerAndResumeRun,
+  loadRunState,
   resumeRun,
   runOrchestration
 } from "./orchestrator.mjs";
@@ -19,7 +25,7 @@ function printHelp() {
     "  ccbridge run --task-file <path>",
     "  ccbridge doctor",
     "  ccbridge presets",
-    "  ccbridge answer --run <runId|runDir> --answers '<json>'",
+    "  ccbridge answer --run <runId|runDir>",
     "  ccbridge resume --run <runId|runDir>",
     "",
     "Options:",
@@ -33,8 +39,8 @@ function printHelp() {
     "  --max-review-rounds <n> Override maxReviewRounds from config.",
     "  --skip-preflight       Skip auth and binary checks before run.",
     "  --run <runId|runDir>   Run directory or run id for answer/resume.",
-    "  --answers <json>       Inline JSON answers map for ccbridge answer.",
-    "  --answers-file <path>  File containing a JSON answers map for ccbridge answer.",
+    "  --answers <json>       Inline JSON answers map for non-interactive ccbridge answer.",
+    "  --answers-file <path>  File containing a JSON answers map for non-interactive ccbridge answer.",
     "  -h, --help             Show this help."
   ];
 
@@ -194,6 +200,119 @@ function printPresets() {
   process.stdout.write(`${lines.join("\n")}\n`);
 }
 
+function formatDurationMs(durationMs) {
+  const totalSeconds = Math.max(1, Math.round(durationMs / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+
+  if (!minutes) {
+    return `${totalSeconds}s`;
+  }
+
+  return `${minutes}m ${seconds}s`;
+}
+
+function createProgressReporter(output = process.stderr) {
+  return (event) => {
+    switch (event.type) {
+      case "run_started":
+        output.write(`\nStarting run ${event.runId}\n`);
+        break;
+      case "run_resumed":
+        output.write(`\nResuming run ${event.runId} at stage ${event.resumedFrom}\n`);
+        break;
+      case "stage_start":
+        if (event.stage === "plan") {
+          output.write(`\nPlanner round ${event.planRound} started\n`);
+          return;
+        }
+
+        if (event.stage === "critique") {
+          output.write(`\nCritic review for plan round ${event.planRound} started\n`);
+          return;
+        }
+
+        if (event.stage === "execute") {
+          output.write(`\nExecutor attempt ${event.executionAttempt} started\n`);
+          return;
+        }
+
+        if (event.stage === "review") {
+          output.write(`\nReviewer pass ${event.reviewRound} started\n`);
+        }
+        break;
+      case "agent_call_start":
+        output.write(`  ${event.roleName} is running ${event.operation}...\n`);
+        break;
+      case "agent_call_heartbeat":
+        output.write(
+          `  still waiting on ${event.roleName} ${event.operation} (${formatDurationMs(event.elapsedMs)} elapsed)\n`
+        );
+        break;
+      case "agent_call_done":
+        output.write(
+          `  ${event.roleName} ${event.operation} finished in ${formatDurationMs(event.elapsedMs)}\n`
+        );
+        break;
+      case "input_requested":
+        output.write(
+          `  ${event.roleName} needs ${event.questionCount} user answer${event.questionCount === 1 ? "" : "s"}\n`
+        );
+        break;
+      default:
+        break;
+    }
+  };
+}
+
+function canUseInteractiveTerminal() {
+  return Boolean(process.stdin.isTTY && process.stdout.isTTY);
+}
+
+async function runInteractiveAnswerSubcommand(runPath) {
+  const cliEntry = process.argv[1];
+
+  const exitCode = await new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, [cliEntry, "answer", "--run", runPath], {
+      cwd: process.cwd(),
+      stdio: "inherit"
+    });
+
+    child.on("error", reject);
+    child.on("close", resolve);
+  });
+
+  if (exitCode !== 0) {
+    process.exitCode = exitCode ?? 1;
+  }
+}
+
+async function runInteractiveAnswerFlow(runPath, onProgress) {
+  let currentRunPath = runPath;
+
+  while (true) {
+    const state = await loadRunState(currentRunPath);
+    const answers = await promptForAnswersInteractively({
+      pendingInput: state.pendingInput,
+      input: process.stdin,
+      output: process.stdout
+    });
+    const summary = await answerAndResumeRun({
+      runPath: currentRunPath,
+      answers,
+      onProgress
+    });
+
+    if (summary.status !== "waiting_for_user" || !canUseInteractiveTerminal()) {
+      return summary;
+    }
+
+    process.stderr.write(
+      "\nMore input is needed to continue this run. Continuing interactive answers.\n"
+    );
+  }
+}
+
 async function main() {
   const args = parseArgs(process.argv);
 
@@ -213,18 +332,44 @@ async function main() {
 
   if (args.command === "answer") {
     const runPath = await resolveRunPath(args.run);
-    const summary = await answerAndResumeRun({
-      runPath,
-      answers: await resolveAnswers(args)
-    });
+    const onProgress = createProgressReporter();
+    let summary;
+
+    if (args.answers || args.answersFile) {
+      summary = await answerAndResumeRun({
+        runPath,
+        answers: await resolveAnswers(args),
+        onProgress
+      });
+    } else {
+      summary = await runInteractiveAnswerFlow(runPath, onProgress);
+    }
+
     process.stdout.write(`${JSON.stringify(summary, null, 2)}\n`);
+    if (summary.status === "waiting_for_user") {
+      process.stderr.write(renderWaitingForUserHint(summary));
+    }
     return;
   }
 
   if (args.command === "resume") {
     const runPath = await resolveRunPath(args.run);
-    const summary = await resumeRun({ runPath });
+    const summary = await resumeRun({
+      runPath,
+      onProgress: createProgressReporter()
+    });
+    if (summary.status === "waiting_for_user" && canUseInteractiveTerminal()) {
+      process.stderr.write(
+        "\nRun paused and needs your input. Opening interactive answers now.\n"
+      );
+      await runInteractiveAnswerSubcommand(runPath);
+      return;
+    }
+
     process.stdout.write(`${JSON.stringify(summary, null, 2)}\n`);
+    if (summary.status === "waiting_for_user") {
+      process.stderr.write(renderWaitingForUserHint(summary));
+    }
     return;
   }
 
@@ -256,8 +401,23 @@ async function main() {
   }
 
   const task = await resolveTask(args);
-  const summary = await runOrchestration({ config, task });
+  const summary = await runOrchestration({
+    config,
+    task,
+    onProgress: createProgressReporter()
+  });
+  if (summary.status === "waiting_for_user" && canUseInteractiveTerminal()) {
+    process.stderr.write(
+      "\nRun paused and needs your input. Opening interactive answers now.\n"
+    );
+    await runInteractiveAnswerSubcommand(summary.runDir);
+    return;
+  }
+
   process.stdout.write(`${JSON.stringify(summary, null, 2)}\n`);
+  if (summary.status === "waiting_for_user") {
+    process.stderr.write(renderWaitingForUserHint(summary));
+  }
 }
 
 main().catch((error) => {

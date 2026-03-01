@@ -93,13 +93,17 @@ export async function runCommand({
   cwd,
   stdinText,
   rawLogPrefix,
-  runDir
+  runDir,
+  onProgress,
+  progressContext
 }) {
   await ensureDir(path.join(runDir, "raw"));
 
   const stdoutChunks = [];
   const stderrChunks = [];
   let spawnError;
+  const startedAt = Date.now();
+  let heartbeat;
 
   const exitCode = await new Promise((resolve) => {
     const child = spawn(command, args, {
@@ -113,7 +117,30 @@ export async function runCommand({
       spawnError = error;
       resolve(null);
     });
-    child.on("close", resolve);
+    child.on("close", (code) => {
+      if (heartbeat) {
+        clearInterval(heartbeat);
+      }
+      resolve(code);
+    });
+
+    onProgress?.({
+      type: "agent_call_start",
+      command,
+      rawLogPrefix,
+      elapsedMs: 0,
+      ...progressContext
+    });
+
+    heartbeat = setInterval(() => {
+      onProgress?.({
+        type: "agent_call_heartbeat",
+        command,
+        rawLogPrefix,
+        elapsedMs: Date.now() - startedAt,
+        ...progressContext
+      });
+    }, 10000);
 
     if (typeof stdinText === "string") {
       child.stdin.write(stdinText, "utf8");
@@ -128,6 +155,15 @@ export async function runCommand({
     writeText(path.join(runDir, "raw", `${rawLogPrefix}.stdout.log`), stdout),
     writeText(path.join(runDir, "raw", `${rawLogPrefix}.stderr.log`), stderr)
   ]);
+
+  onProgress?.({
+    type: "agent_call_done",
+    command,
+    rawLogPrefix,
+    elapsedMs: Date.now() - startedAt,
+    exitCode,
+    ...progressContext
+  });
 
   if (spawnError || exitCode !== 0) {
     throw new Error(

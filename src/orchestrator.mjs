@@ -56,7 +56,8 @@ async function invokeAgent({
   prompt,
   payload,
   workspaceDir,
-  runDir
+  runDir,
+  onProgress
 }) {
   const response = await provider.run({
     operation,
@@ -65,7 +66,8 @@ async function invokeAgent({
     schema: schemasByOperation[operation],
     workspaceDir,
     runDir,
-    roleName
+    roleName,
+    onProgress
   });
 
   return normalizeAgentResponse(response);
@@ -220,8 +222,14 @@ function buildReviewContext(state) {
   };
 }
 
-async function runPlanStage(state, providers) {
+async function runPlanStage(state, providers, onProgress) {
   const context = buildPlanContext(state);
+  onProgress?.({
+    type: "stage_start",
+    stage: "plan",
+    roleName: "planner",
+    planRound: state.planRound
+  });
   const response = await invokeAgent({
     provider: providers.planner,
     roleName: "planner",
@@ -229,10 +237,17 @@ async function runPlanStage(state, providers) {
     prompt: buildPlanPrompt(context),
     payload: context,
     workspaceDir: state.config.workspaceDir,
-    runDir: state.runDir
+    runDir: state.runDir,
+    onProgress
   });
 
   if (response.response_type === "needs_input") {
+    onProgress?.({
+      type: "input_requested",
+      stage: "plan",
+      roleName: "planner",
+      questionCount: response.input_request.questions.length
+    });
     return pauseForInput(state, "planner", "plan", response.input_request);
   }
 
@@ -245,8 +260,14 @@ async function runPlanStage(state, providers) {
   return null;
 }
 
-async function runCritiqueStage(state, providers) {
+async function runCritiqueStage(state, providers, onProgress) {
   const context = buildCritiqueContext(state);
+  onProgress?.({
+    type: "stage_start",
+    stage: "critique",
+    roleName: "critic",
+    planRound: state.planRound
+  });
   const response = await invokeAgent({
     provider: providers.critic,
     roleName: "critic",
@@ -254,10 +275,17 @@ async function runCritiqueStage(state, providers) {
     prompt: buildCritiquePrompt(context),
     payload: context,
     workspaceDir: state.config.workspaceDir,
-    runDir: state.runDir
+    runDir: state.runDir,
+    onProgress
   });
 
   if (response.response_type === "needs_input") {
+    onProgress?.({
+      type: "input_requested",
+      stage: "critique",
+      roleName: "critic",
+      questionCount: response.input_request.questions.length
+    });
     return pauseForInput(state, "critic", "critique", response.input_request);
   }
 
@@ -298,8 +326,14 @@ async function runCritiqueStage(state, providers) {
   return null;
 }
 
-async function runExecuteStage(state, providers) {
+async function runExecuteStage(state, providers, onProgress) {
   const context = buildExecutionContext(state);
+  onProgress?.({
+    type: "stage_start",
+    stage: "execute",
+    roleName: "executor",
+    executionAttempt: state.executionAttempt
+  });
   const response = await invokeAgent({
     provider: providers.executor,
     roleName: "executor",
@@ -307,10 +341,17 @@ async function runExecuteStage(state, providers) {
     prompt: buildExecutionPrompt(context),
     payload: context,
     workspaceDir: state.config.workspaceDir,
-    runDir: state.runDir
+    runDir: state.runDir,
+    onProgress
   });
 
   if (response.response_type === "needs_input") {
+    onProgress?.({
+      type: "input_requested",
+      stage: "execute",
+      roleName: "executor",
+      questionCount: response.input_request.questions.length
+    });
     return pauseForInput(state, "executor", "execute", response.input_request);
   }
 
@@ -327,8 +368,14 @@ async function runExecuteStage(state, providers) {
   return null;
 }
 
-async function runReviewStage(state, providers) {
+async function runReviewStage(state, providers, onProgress) {
   const context = buildReviewContext(state);
+  onProgress?.({
+    type: "stage_start",
+    stage: "review",
+    roleName: "reviewer",
+    reviewRound: state.executionAttempt
+  });
   const response = await invokeAgent({
     provider: providers.reviewer,
     roleName: "reviewer",
@@ -336,10 +383,17 @@ async function runReviewStage(state, providers) {
     prompt: buildReviewPrompt(context),
     payload: context,
     workspaceDir: state.config.workspaceDir,
-    runDir: state.runDir
+    runDir: state.runDir,
+    onProgress
   });
 
   if (response.response_type === "needs_input") {
+    onProgress?.({
+      type: "input_requested",
+      stage: "review",
+      roleName: "reviewer",
+      questionCount: response.input_request.questions.length
+    });
     return pauseForInput(state, "reviewer", "review", response.input_request);
   }
 
@@ -380,7 +434,7 @@ async function runReviewStage(state, providers) {
   return null;
 }
 
-async function continueOrchestration(state) {
+async function continueOrchestration(state, onProgress) {
   const providers = buildProviders(state.config);
 
   while (state.stage !== "done") {
@@ -388,16 +442,16 @@ async function continueOrchestration(state) {
 
     switch (state.stage) {
       case "plan":
-        summary = await runPlanStage(state, providers);
+        summary = await runPlanStage(state, providers, onProgress);
         break;
       case "critique":
-        summary = await runCritiqueStage(state, providers);
+        summary = await runCritiqueStage(state, providers, onProgress);
         break;
       case "execute":
-        summary = await runExecuteStage(state, providers);
+        summary = await runExecuteStage(state, providers, onProgress);
         break;
       case "review":
-        summary = await runReviewStage(state, providers);
+        summary = await runReviewStage(state, providers, onProgress);
         break;
       default:
         throw new Error(`Unknown orchestration stage: ${state.stage}`);
@@ -415,7 +469,7 @@ async function continueOrchestration(state) {
   return persistSummary(state);
 }
 
-export async function runOrchestration({ config, task }) {
+export async function runOrchestration({ config, task, onProgress }) {
   const runId = buildRunId();
   const runDir = path.join(config.artifactsDir, runId);
   await ensureDir(runDir);
@@ -423,7 +477,12 @@ export async function runOrchestration({ config, task }) {
 
   const state = createInitialState({ config, task, runId, runDir });
   await persistState(state);
-  return continueOrchestration(state);
+  onProgress?.({
+    type: "run_started",
+    runId,
+    runDir
+  });
+  return continueOrchestration(state, onProgress);
 }
 
 export async function loadRunState(runPath) {
@@ -503,7 +562,7 @@ function normalizeAnswers(pendingInput, answers) {
   return normalized;
 }
 
-export async function answerAndResumeRun({ runPath, answers }) {
+export async function answerAndResumeRun({ runPath, answers, onProgress }) {
   const state = await loadRunState(runPath);
 
   if (state.status !== "waiting_for_user" || !state.pendingInput) {
@@ -530,10 +589,16 @@ export async function answerAndResumeRun({ runPath, answers }) {
   await clearPendingInputArtifacts(state.runDir);
   await persistState(state);
 
-  return continueOrchestration(state);
+  onProgress?.({
+    type: "run_resumed",
+    runId: state.runId,
+    runDir: state.runDir,
+    resumedFrom: state.stage
+  });
+  return continueOrchestration(state, onProgress);
 }
 
-export async function resumeRun({ runPath }) {
+export async function resumeRun({ runPath, onProgress }) {
   const state = await loadRunState(runPath);
 
   if (state.status === "waiting_for_user") {
@@ -546,5 +611,11 @@ export async function resumeRun({ runPath }) {
 
   state.status = "running";
   await persistState(state);
-  return continueOrchestration(state);
+  onProgress?.({
+    type: "run_resumed",
+    runId: state.runId,
+    runDir: state.runDir,
+    resumedFrom: state.stage
+  });
+  return continueOrchestration(state, onProgress);
 }

@@ -98,7 +98,8 @@ Example:
     "executor": {
       "provider": "claude-cli",
       "model": "sonnet",
-      "permissionMode": "acceptEdits"
+      "permissionMode": "bypassPermissions",
+      "dangerouslySkipPermissions": true
     },
     "reviewer": {
       "provider": "codex-cli",
@@ -169,7 +170,17 @@ If an agent cannot proceed without a user decision, the run pauses instead of ha
 
 The pending questions are written to `pending-input.json` and `input-N.request.json` inside the run directory.
 
-Answer them with inline JSON:
+In a normal interactive terminal, `ccbridge run` will automatically open the question step when the run pauses for input.
+
+If you want to answer later, or the run happened in a non-interactive environment, answer it in a second step:
+
+```bash
+ccbridge answer --run 2026-03-01T20-00-00.000Z
+```
+
+`ccbridge` will display the questions in the terminal and let the user choose options by number.
+
+If you prefer automation, you can still answer them with inline JSON:
 
 ```bash
 ccbridge answer \
@@ -204,6 +215,7 @@ Current behavior is human handoff only: when an agent asks for clarification, `c
 - `planner` and `critic` exchange structured JSON, not free-form prose.
 - The planning loop is intentionally cooperative: blocking issues should be rare, stable across rounds, and reserved for material execution risk.
 - `executor` is the only role that should modify the workspace.
+- The default Claude `executor` preset uses bypassed permissions so it can edit files and run validation commands like `npm test` and `npm run build` without stopping for interactive approval. Use this only in repos you trust.
 - `reviewer` checks the result after implementation, and the orchestrator can feed blocking findings back into a repair pass.
 - `run` performs a preflight check for `claude` and `codex` auth before starting.
 - Set `skipGitRepoCheck` for `codex-cli` roles if the target workspace is not a git repository.

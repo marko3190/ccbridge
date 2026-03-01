@@ -14,7 +14,7 @@ export class CodexCliProvider {
     this.extraArgs = config.extraArgs ?? [];
   }
 
-  async run({ operation, prompt, schema, workspaceDir, runDir, roleName }) {
+  async run({ operation, prompt, schema, workspaceDir, runDir, roleName, onProgress }) {
     const rawLogPrefix = `${roleName}-${operation}`;
     const schemaPath = await writeSchemaFile(runDir, rawLogPrefix, schema);
     const outputPath = path.join(runDir, "raw", `${rawLogPrefix}.result.json`);
@@ -55,7 +55,12 @@ export class CodexCliProvider {
       cwd: workspaceDir,
       stdinText: prompt,
       rawLogPrefix,
-      runDir
+      runDir,
+      onProgress,
+      progressContext: {
+        roleName,
+        operation
+      }
     });
 
     const outputText = await readFile(outputPath, "utf8").catch(() => stdout);

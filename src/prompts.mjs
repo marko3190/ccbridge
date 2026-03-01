@@ -88,6 +88,8 @@ function buildInputProtocolInstructions() {
     "If you are truly blocked on a human decision, do not ask in free-form prose and do not simulate an interactive terminal choice.",
     "Instead return a JSON envelope with response_type='needs_input' and an input_request object.",
     "Use input_kind='single_select' for one choice, input_kind='multi_select' for checkbox-style multiple choice, and input_kind='text' for free text.",
+    "Because the schema is strict, always include every field in the envelope and every question/option object.",
+    "Set unused fields to null instead of omitting them. For example: result=null on needs_input, input_request=null on result, options=null for text questions, min_select/max_select=null when not applicable, description=null when an option has no extra description.",
     "Keep questions minimal and only ask what is necessary to continue safely.",
     "If you can infer the answer from the repository, the task, or prior user answers, do not ask."
   ].join("\n");
