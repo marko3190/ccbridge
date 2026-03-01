@@ -13,6 +13,23 @@ The runtime is provider-based, but the primary path in this project is direct CL
 - `codex-cli`
 - `mock`
 
+## Quick start
+
+For most runs you only need a preset, a workspace, and a task file:
+
+```bash
+ccbridge run \
+  --preset balanced \
+  --workspace /absolute/path/to/repo \
+  --task-file ./task.md
+```
+
+Useful presets:
+
+- `balanced`: Claude plans and implements, Codex validates and reviews
+- `codex-exec`: Claude plans, Codex validates and implements, Claude reviews
+- `codex-leads`: Codex plans and implements, Claude critiques and reviews
+
 ## What it does
 
 1. Planner creates a structured implementation plan.
@@ -46,6 +63,8 @@ You do not need a web server for the MVP.
 The default live config is [ccbridge.config.json](./ccbridge.config.json).
 
 If you want a no-network smoke test, there is still [examples/mock.config.json](./examples/mock.config.json), but it is only for local validation.
+
+You do not need a config file for basic usage. If `ccbridge.config.json` is missing, `ccbridge` falls back to the `balanced` preset automatically.
 
 Example:
 
@@ -90,6 +109,12 @@ First verify both CLIs are installed and logged in:
 npm run doctor
 ```
 
+List the built-in role layouts:
+
+```bash
+ccbridge presets
+```
+
 Then run against the current repository:
 
 ```bash
@@ -108,6 +133,7 @@ If your target repository is not the current directory, override it explicitly:
 
 ```bash
 npm start -- run \
+  --preset balanced \
   --workspace /absolute/path/to/repo \
   --task "Implement a safer retry policy for outbound webhooks."
 ```

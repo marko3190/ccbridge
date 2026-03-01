@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtemp, readFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { loadConfig } from "../src/config.mjs";
 import { runOrchestration } from "../src/orchestrator.mjs";
 import { buildCritiquePrompt, buildPlanPrompt } from "../src/prompts.mjs";
 
@@ -161,4 +162,16 @@ test("critique prompt emphasizes high blocking threshold and final-round converg
   assert.match(prompt, /Use a high bar for blocking issues/);
   assert.match(prompt, /This is the final planning round/);
   assert.match(prompt, /Approve when the plan is good enough to execute safely/);
+});
+
+test("loadConfig can build a runnable config from a preset without a config file", async () => {
+  const config = await loadConfig(null, {
+    preset: "codex-exec",
+    workspaceDir: "/tmp/demo-workspace"
+  });
+
+  assert.equal(config.roles.planner.provider, "claude-cli");
+  assert.equal(config.roles.executor.provider, "codex-cli");
+  assert.equal(config.roles.executor.sandbox, "workspace-write");
+  assert.equal(config.workspaceDir, "/tmp/demo-workspace");
 });

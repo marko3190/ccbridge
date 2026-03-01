@@ -6,6 +6,7 @@ import { access, readFile } from "node:fs/promises";
 import { loadConfig } from "./config.mjs";
 import { runOrchestration } from "./orchestrator.mjs";
 import { formatPreflightReport, runPreflight } from "./preflight.mjs";
+import { getPresetNames, getPresetSummaries } from "./presets.mjs";
 
 function printHelp() {
   const lines = [
@@ -13,9 +14,11 @@ function printHelp() {
     "  ccbridge run --task \"<task>\"",
     "  ccbridge run --task-file <path>",
     "  ccbridge doctor",
+    "  ccbridge presets",
     "",
     "Options:",
-    "  --config <path>        Path to ccbridge config JSON. Defaults to ./ccbridge.config.json.",
+    "  --config <path>        Path to ccbridge config JSON. Optional if a preset is enough.",
+    "  --preset <name>        Preset role layout. Defaults to balanced.",
     "  --task <text>          Task to give the planner.",
     "  --task-file <path>     Read task from a file.",
     "  --workspace <path>     Override workspaceDir from config.",
@@ -41,6 +44,10 @@ function parseArgs(argv) {
     switch (current) {
       case "--config":
         args.configPath = next;
+        index += 1;
+        break;
+      case "--preset":
+        args.preset = next;
         index += 1;
         break;
       case "--task":
@@ -107,8 +114,25 @@ async function resolveConfigPath(configPath) {
     return defaultPath;
   } catch {}
 
-  await access(legacyPath);
-  return legacyPath;
+  try {
+    await access(legacyPath);
+    return legacyPath;
+  } catch {}
+
+  return null;
+}
+
+function printPresets() {
+  const lines = ["Available presets:"];
+
+  for (const preset of getPresetSummaries()) {
+    lines.push(`  ${preset.name}`);
+    lines.push(`    ${preset.description}`);
+  }
+
+  lines.push("");
+  lines.push(`Default preset: balanced`);
+  process.stdout.write(`${lines.join("\n")}\n`);
 }
 
 async function main() {
@@ -119,12 +143,18 @@ async function main() {
     return;
   }
 
-  if (!["run", "doctor"].includes(args.command)) {
+  if (!["run", "doctor", "presets"].includes(args.command)) {
     throw new Error(`Unsupported command: ${args.command}`);
+  }
+
+  if (args.command === "presets") {
+    printPresets();
+    return;
   }
 
   const configPath = await resolveConfigPath(args.configPath);
   const config = await loadConfig(configPath, {
+    preset: args.preset,
     workspaceDir: args.workspaceDir,
     artifactsDir: args.artifactsDir,
     maxPlanRounds: args.maxPlanRounds,

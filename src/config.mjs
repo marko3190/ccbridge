@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
+import { getPresetConfig } from "./presets.mjs";
 
 function assertRoleConfig(config, roleName) {
   if (!config?.provider) {
@@ -7,32 +8,58 @@ function assertRoleConfig(config, roleName) {
   }
 }
 
+function mergeRoleConfig(baseConfig, overrideConfig) {
+  return {
+    ...(baseConfig ?? {}),
+    ...(overrideConfig ?? {})
+  };
+}
+
+function buildBaseConfig(presetName) {
+  const preset = getPresetConfig(presetName);
+  return {
+    workspaceDir: ".",
+    artifactsDir: ".runs",
+    maxPlanRounds: 3,
+    maxReviewRounds: 1,
+    roles: preset.roles
+  };
+}
+
 export async function loadConfig(configPath, overrides = {}) {
-  const resolvedConfigPath = path.resolve(configPath);
-  const configDir = path.dirname(resolvedConfigPath);
-  const raw = await readFile(resolvedConfigPath, "utf8");
-  const parsed = JSON.parse(raw);
+  const baseConfig = buildBaseConfig(overrides.preset);
+  let configDir = process.cwd();
+  let parsed = {};
+
+  if (configPath) {
+    const resolvedConfigPath = path.resolve(configPath);
+    configDir = path.dirname(resolvedConfigPath);
+    const raw = await readFile(resolvedConfigPath, "utf8");
+    parsed = JSON.parse(raw);
+  }
 
   const workspaceDir = path.resolve(
     configDir,
-    overrides.workspaceDir ?? parsed.workspaceDir ?? process.cwd()
+    overrides.workspaceDir ?? parsed.workspaceDir ?? baseConfig.workspaceDir ?? process.cwd()
   );
 
   const artifactsDir = path.resolve(
     workspaceDir,
-    overrides.artifactsDir ?? parsed.artifactsDir ?? ".runs"
+    overrides.artifactsDir ?? parsed.artifactsDir ?? baseConfig.artifactsDir ?? ".runs"
   );
 
   const config = {
     workspaceDir,
     artifactsDir,
-    maxPlanRounds: overrides.maxPlanRounds ?? parsed.maxPlanRounds ?? 3,
-    maxReviewRounds: overrides.maxReviewRounds ?? parsed.maxReviewRounds ?? 1,
+    maxPlanRounds:
+      overrides.maxPlanRounds ?? parsed.maxPlanRounds ?? baseConfig.maxPlanRounds ?? 3,
+    maxReviewRounds:
+      overrides.maxReviewRounds ?? parsed.maxReviewRounds ?? baseConfig.maxReviewRounds ?? 1,
     roles: {
-      planner: parsed.roles?.planner,
-      critic: parsed.roles?.critic,
-      executor: parsed.roles?.executor,
-      reviewer: parsed.roles?.reviewer
+      planner: mergeRoleConfig(baseConfig.roles?.planner, parsed.roles?.planner),
+      critic: mergeRoleConfig(baseConfig.roles?.critic, parsed.roles?.critic),
+      executor: mergeRoleConfig(baseConfig.roles?.executor, parsed.roles?.executor),
+      reviewer: mergeRoleConfig(baseConfig.roles?.reviewer, parsed.roles?.reviewer)
     }
   };
 
