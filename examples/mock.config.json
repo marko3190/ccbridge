@@ -1,0 +1,21 @@
+{
+  "workspaceDir": "..",
+  "artifactsDir": ".runs-mock",
+  "maxPlanRounds": 3,
+  "maxReviewRounds": 1,
+  "roles": {
+    "planner": {
+      "provider": "mock"
+    },
+    "critic": {
+      "provider": "mock"
+    },
+    "executor": {
+      "provider": "mock"
+    },
+    "reviewer": {
+      "provider": "mock",
+      "behavior": "always_approve"
+    }
+  }
+}

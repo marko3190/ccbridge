@@ -1,0 +1,30 @@
+{
+  "workspaceDir": "..",
+  "artifactsDir": ".runs",
+  "maxPlanRounds": 3,
+  "maxReviewRounds": 1,
+  "roles": {
+    "planner": {
+      "provider": "claude-cli",
+      "model": "sonnet",
+      "permissionMode": "dontAsk"
+    },
+    "critic": {
+      "provider": "codex-cli",
+      "sandbox": "read-only",
+      "approvalPolicy": "never",
+      "skipGitRepoCheck": true
+    },
+    "executor": {
+      "provider": "claude-cli",
+      "model": "sonnet",
+      "permissionMode": "acceptEdits"
+    },
+    "reviewer": {
+      "provider": "codex-cli",
+      "sandbox": "read-only",
+      "approvalPolicy": "never",
+      "skipGitRepoCheck": true
+    }
+  }
+}

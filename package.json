@@ -1,0 +1,18 @@
+{
+  "name": "ccbridge",
+  "version": "0.1.0",
+  "description": "Bridge Claude Code and Codex through a planner-critic-executor-reviewer loop.",
+  "type": "module",
+  "bin": {
+    "ccbridge": "./src/cli.mjs"
+  },
+  "scripts": {
+    "start": "node ./src/cli.mjs",
+    "doctor": "node ./src/cli.mjs doctor",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "license": "MIT"
+}
