@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { loadConfig } from "../src/config.mjs";
 import { runOrchestration } from "../src/orchestrator.mjs";
-import { buildCritiquePrompt, buildPlanPrompt } from "../src/prompts.mjs";
+import { buildCritiquePrompt, buildPlanPrompt, buildReviewPrompt } from "../src/prompts.mjs";
 
 function createMockConfig(baseDir) {
   return {
@@ -174,4 +174,36 @@ test("loadConfig can build a runnable config from a preset without a config file
   assert.equal(config.roles.executor.provider, "codex-cli");
   assert.equal(config.roles.executor.sandbox, "workspace-write");
   assert.equal(config.workspaceDir, "/tmp/demo-workspace");
+});
+
+test("review prompt marks the final allowed review pass correctly", () => {
+  const prompt = buildReviewPrompt({
+    task: "Finalize the change set.",
+    workspaceDir: "/tmp/repo",
+    plan: {
+      goal: "Goal",
+      revision_notes: [],
+      assumptions: [],
+      steps: [],
+      files_to_touch: [],
+      risks: [],
+      tests: [],
+      acceptance_criteria: [],
+      open_questions: [],
+      status: "approved"
+    },
+    execution: {
+      status: "completed",
+      summary: "Done.",
+      files_changed: ["README.md"],
+      tests_run: [],
+      plan_deviations: [],
+      follow_up: []
+    },
+    reviewRound: 2,
+    maxReviewRounds: 1,
+    reviewHistory: []
+  });
+
+  assert.match(prompt, /This is the final allowed review pass/);
 });

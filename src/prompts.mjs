@@ -254,7 +254,7 @@ export function buildReviewPrompt({
     );
   }
 
-  if (typeof maxReviewRounds === "number" && reviewRound > maxReviewRounds) {
+  if (typeof maxReviewRounds === "number" && reviewRound === maxReviewRounds + 1) {
     instructions.push(
       "This is the final allowed review pass. Request changes only for material correctness or validation issues."
     );

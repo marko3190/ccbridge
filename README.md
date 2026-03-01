@@ -15,6 +15,15 @@ The runtime is provider-based, but the primary path in this project is direct CL
 
 ## Quick start
 
+One-time setup if you want the `ccbridge` command in your shell:
+
+```bash
+cd /Users/mklejnglas/ccbridge
+npm link
+```
+
+If you prefer not to link it globally, use `npm start -- ...` from the repo root instead.
+
 For most runs you only need a preset, a workspace, and a task file:
 
 ```bash
@@ -106,7 +115,7 @@ Example:
 First verify both CLIs are installed and logged in:
 
 ```bash
-npm run doctor
+ccbridge doctor
 ```
 
 List the built-in role layouts:
@@ -118,24 +127,30 @@ ccbridge presets
 Then run against the current repository:
 
 ```bash
-npm start -- run \
+ccbridge run \
   --task "Implement a safer retry policy for outbound webhooks."
 ```
 
 Or load the task from a file:
 
 ```bash
-npm start -- run \
+ccbridge run \
   --task-file ./task.md
 ```
 
 If your target repository is not the current directory, override it explicitly:
 
 ```bash
-npm start -- run \
+ccbridge run \
   --preset balanced \
   --workspace /absolute/path/to/repo \
   --task "Implement a safer retry policy for outbound webhooks."
+```
+
+Without `npm link`, use the same commands through `npm start --`, for example:
+
+```bash
+npm start -- run --preset balanced --workspace /absolute/path/to/repo --task-file ./task.md
 ```
 
 ## Notes
