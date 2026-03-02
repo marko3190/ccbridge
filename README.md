@@ -218,6 +218,7 @@ ccbridge run \
 Additional documentation:
 
 - [Architecture](./docs/architecture.md)
+- [Command Cheat Sheet](./docs/guides/command-cheatsheet.md)
 - [How To Add A Provider](./docs/how-to-add-a-provider.md)
 - [Security Model](./docs/security-model.md)
 - [First Run Guide](./docs/guides/first-run.md)

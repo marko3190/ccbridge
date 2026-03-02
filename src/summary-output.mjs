@@ -125,6 +125,7 @@ export function renderRunSummary(summary, options = {}) {
     }
 
     if (summary.analysisSummary) {
+      lines.push("");
       lines.push(`Summary: ${summary.analysisSummary}`);
     }
 
@@ -140,13 +141,24 @@ export function renderRunSummary(summary, options = {}) {
     }
 
     if (options.verbose && summary.roleAgents) {
+      lines.push("");
       lines.push(...formatRoleAgents(summary.roleAgents));
     }
 
-    lines.push(...formatAnalysisList("Recommended next steps:", summary.recommendedNextSteps));
-    lines.push(...formatAnalysisList("Open questions:", summary.openQuestions));
+    if (summary.recommendedNextSteps?.length) {
+      lines.push("");
+      lines.push(...formatAnalysisList("Recommended next steps:", summary.recommendedNextSteps));
+    }
+
+    if (summary.openQuestions?.length) {
+      lines.push("");
+      lines.push(...formatAnalysisList("Open questions:", summary.openQuestions));
+    }
 
     if (options.verbose) {
+      if (summary.lastAnalysisFile || summary.lastChallengeFile) {
+        lines.push("");
+      }
       if (summary.lastAnalysisFile) {
         lines.push(`Last analysis artifact: ${summary.lastAnalysisFile}`);
       }
@@ -156,6 +168,7 @@ export function renderRunSummary(summary, options = {}) {
       }
     }
 
+    lines.push("");
     lines.push(`Artifacts: ${summary.runDir}`);
     return `${lines.join("\n")}\n`;
   }

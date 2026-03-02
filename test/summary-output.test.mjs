@@ -131,7 +131,11 @@ test("renderRunSummary shows a dedicated analysis summary", () => {
   assert.match(text, /Analysis approved: yes/);
   assert.match(text, /Analysis rounds: 2/);
   assert.match(text, /Confidence: medium/);
+  assert.match(text, /Confidence: medium\n\nSummary:/);
   assert.match(text, /Follow-up questions asked: 1/);
+  assert.match(text, /Follow-up questions asked: 1\n\nRecommended next steps:/);
   assert.match(text, /Recommended next steps:/);
+  assert.match(text, /- Confirm whether the fix should stay narrow or sweep related views\.\n\nOpen questions:/);
   assert.match(text, /Open questions:/);
+  assert.match(text, /Open questions:\n- Does the Firefox-only symptom depend on image aspect ratios\?\n\nArtifacts:/);
 });
