@@ -2,6 +2,8 @@
 
 This is a minimal first run using `ccbridge` against a local repository.
 
+This guide uses `npm start -- ...` on purpose, so it works even if you have not added `ccbridge` to your shell `PATH` yet.
+
 ## 1. Verify The Environment
 
 From the `ccbridge` repo:

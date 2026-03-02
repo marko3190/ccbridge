@@ -53,13 +53,60 @@ Requirements:
 - local `claude` CLI installed and authenticated if you want `claude-cli`
 - local `codex` CLI installed and authenticated if you want `codex-cli`
 
-Optional one-time setup if you want `ccbridge` in your shell:
+You have two supported ways to use `ccbridge`.
+
+### Option A: No PATH Setup
+
+If you just want to run the project from this repo, use:
+
+```bash
+npm start -- <command>
+```
+
+Examples:
+
+```bash
+npm start -- doctor
+npm start -- presets
+npm start -- run --preset balanced --workspace /absolute/path/to/repo --task-file ./task.md
+```
+
+### Option B: Add `ccbridge` As A Shell Command
+
+If you want `ccbridge` available directly in your shell, run this once from the repo root:
 
 ```bash
 npm link
 ```
 
-If you prefer not to link it globally, use `npm start -- ...` from the repo root.
+Then verify it:
+
+```bash
+command -v ccbridge
+ccbridge --help
+```
+
+If `ccbridge` is still not found on macOS or Linux, your global npm bin directory is probably not on `PATH`.
+
+Check the npm prefix:
+
+```bash
+npm config get prefix
+```
+
+Then add its `bin` directory to your shell startup file, for example in `~/.zshrc`:
+
+```bash
+export PATH="$(npm config get prefix)/bin:$PATH"
+```
+
+Reload your shell:
+
+```bash
+source ~/.zshrc
+```
+
+If you do not want to change your `PATH`, keep using `npm start -- ...`.
 
 Check the environment first:
 
@@ -344,6 +391,29 @@ ccbridge continue --run <runId>
 ### Binary not found (ENOENT)
 
 When doctor shows `binary unavailable: spawn <cli> ENOENT`, the CLI is not on your `PATH`. Install the respective CLI from its official documentation and ensure the binary is reachable from your shell before running the orchestrator.
+
+### `ccbridge: command not found`
+
+If your shell cannot find `ccbridge`, either:
+
+1. use `npm start -- ...` from the repo root, or
+2. run `npm link` from the repo root and verify with:
+
+```bash
+command -v ccbridge
+```
+
+If `npm link` succeeds but the command is still missing, add the npm global bin directory to your shell `PATH`:
+
+```bash
+export PATH="$(npm config get prefix)/bin:$PATH"
+```
+
+Then reload your shell, for example:
+
+```bash
+source ~/.zshrc
+```
 
 ### Auth not configured
 
