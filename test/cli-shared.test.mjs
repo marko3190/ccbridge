@@ -1,6 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { parseStructuredOutput } from "../src/providers/cli-shared.mjs";
+import { mkdtemp } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import process from "node:process";
+import { parseStructuredOutput, runCommand } from "../src/providers/cli-shared.mjs";
 
 test("parseStructuredOutput preserves wrapped result envelopes", () => {
   const parsed = parseStructuredOutput(
@@ -45,4 +49,21 @@ test("parseStructuredOutput preserves wrapped needs_input envelopes", () => {
 
   assert.equal(parsed.response_type, "needs_input");
   assert.equal(parsed.input_request.questions[0].id, "allowed_scopes");
+});
+
+test("runCommand times out long-running agent calls", async () => {
+  const runDir = await mkdtemp(path.join(os.tmpdir(), "ccbridge-run-command-"));
+
+  await assert.rejects(
+    () =>
+      runCommand({
+        command: process.execPath,
+        args: ["-e", "setTimeout(() => {}, 1000)"],
+        cwd: runDir,
+        rawLogPrefix: "timeout-test",
+        runDir,
+        timeoutMs: 50
+      }),
+    /Timed out after 50ms/
+  );
 });

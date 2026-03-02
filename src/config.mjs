@@ -22,6 +22,7 @@ function buildBaseConfig(presetName) {
     artifactsDir: ".runs",
     maxPlanRounds: 3,
     maxReviewRounds: 1,
+    maxAgentCallMs: 300000,
     roles: preset.roles
   };
 }
@@ -55,6 +56,8 @@ export async function loadConfig(configPath, overrides = {}) {
       overrides.maxPlanRounds ?? parsed.maxPlanRounds ?? baseConfig.maxPlanRounds ?? 3,
     maxReviewRounds:
       overrides.maxReviewRounds ?? parsed.maxReviewRounds ?? baseConfig.maxReviewRounds ?? 1,
+    maxAgentCallMs:
+      parsed.maxAgentCallMs ?? baseConfig.maxAgentCallMs ?? 300000,
     roles: {
       planner: mergeRoleConfig(baseConfig.roles?.planner, parsed.roles?.planner),
       critic: mergeRoleConfig(baseConfig.roles?.critic, parsed.roles?.critic),

@@ -3,6 +3,7 @@
   "artifactsDir": ".runs-mock",
   "maxPlanRounds": 3,
   "maxReviewRounds": 1,
+  "maxAgentCallMs": 300000,
   "roles": {
     "planner": {
       "provider": "mock"

@@ -274,6 +274,7 @@ Example config:
   "artifactsDir": ".runs",
   "maxPlanRounds": 3,
   "maxReviewRounds": 1,
+  "maxAgentCallMs": 300000,
   "roles": {
     "planner": {
       "provider": "claude-cli",
@@ -310,6 +311,7 @@ Notes:
 - `reviewer` checks the result after implementation and can trigger a repair pass
 - `run` performs preflight checks for `claude` and `codex` auth before starting
 - `skipGitRepoCheck` is useful when a target workspace is not a git repo
+- `maxAgentCallMs` limits a single planner / critic / executor / reviewer call before `ccbridge` times it out
 - `mock` exists only for local smoke tests
 
 ## Contributing

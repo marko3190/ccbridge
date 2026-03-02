@@ -58,6 +58,7 @@ async function invokeAgent({
   payload,
   workspaceDir,
   runDir,
+  maxAgentCallMs,
   onProgress
 }) {
   const response = await provider.run({
@@ -68,6 +69,7 @@ async function invokeAgent({
     workspaceDir,
     runDir,
     roleName,
+    maxAgentCallMs,
     onProgress
   });
 
@@ -297,6 +299,7 @@ async function runPlanStage(state, providers, onProgress) {
     payload: context,
     workspaceDir: state.config.workspaceDir,
     runDir: state.runDir,
+    maxAgentCallMs: state.config.maxAgentCallMs,
     onProgress
   });
 
@@ -336,6 +339,7 @@ async function runCritiqueStage(state, providers, onProgress) {
     payload: context,
     workspaceDir: state.config.workspaceDir,
     runDir: state.runDir,
+    maxAgentCallMs: state.config.maxAgentCallMs,
     onProgress
   });
 
@@ -403,6 +407,7 @@ async function runExecuteStage(state, providers, onProgress) {
     payload: context,
     workspaceDir: state.config.workspaceDir,
     runDir: state.runDir,
+    maxAgentCallMs: state.config.maxAgentCallMs,
     onProgress
   });
 
@@ -446,6 +451,7 @@ async function runReviewStage(state, providers, onProgress) {
     payload: context,
     workspaceDir: state.config.workspaceDir,
     runDir: state.runDir,
+    maxAgentCallMs: state.config.maxAgentCallMs,
     onProgress
   });
 
@@ -545,7 +551,10 @@ async function restartFromLatestReview(state, onProgress) {
     throw new Error("This run does not have a pending review change request to continue from.");
   }
 
-  state.config.maxReviewRounds += 1;
+  state.config = {
+    ...state.config,
+    maxReviewRounds: state.config.maxReviewRounds + 1
+  };
   state.latestReviewToAddress = state.review;
   state.executionAttempt += 1;
   state.stage = "execute";

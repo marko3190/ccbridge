@@ -21,7 +21,11 @@ export async function readJson(filePath) {
 }
 
 export async function deleteFile(filePath) {
-  await unlink(filePath).catch(() => {});
+  await unlink(filePath).catch((error) => {
+    if (error?.code !== "ENOENT") {
+      throw error;
+    }
+  });
 }
 
 export function buildRunId(now = new Date()) {

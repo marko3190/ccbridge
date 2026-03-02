@@ -32,6 +32,7 @@ class ExampleProvider {
     workspaceDir,
     runDir,
     roleName,
+    maxAgentCallMs,
     onProgress
   }) {}
 }
@@ -45,6 +46,7 @@ The important inputs are:
 - `workspaceDir`: target repo path
 - `runDir`: artifact directory for this run
 - `roleName`: `planner`, `critic`, `executor`, or `reviewer`
+- `maxAgentCallMs`: per-call timeout budget from the top-level config
 - `onProgress`: callback used for terminal progress updates
 
 ## 2. Return The Correct Envelope
@@ -140,7 +142,16 @@ export class ExampleCliProvider {
     this.extraArgs = config.extraArgs ?? [];
   }
 
-  async run({ operation, prompt, schema, workspaceDir, runDir, roleName, onProgress }) {
+  async run({
+    operation,
+    prompt,
+    schema,
+    workspaceDir,
+    runDir,
+    roleName,
+    maxAgentCallMs,
+    onProgress
+  }) {
     const args = [
       "--json",
       "--schema",
@@ -160,6 +171,7 @@ export class ExampleCliProvider {
       cwd: workspaceDir,
       rawLogPrefix: `${roleName}-${operation}`,
       runDir,
+      timeoutMs: maxAgentCallMs,
       onProgress,
       progressContext: {
         roleName,

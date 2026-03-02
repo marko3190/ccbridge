@@ -4,6 +4,7 @@ import { spawn } from "node:child_process";
 import path from "node:path";
 import process from "node:process";
 import { access, readFile } from "node:fs/promises";
+import { pathToFileURL } from "node:url";
 import {
   promptForAnswersInteractively,
   renderContinueHint,
@@ -55,7 +56,24 @@ function printHelp() {
   process.stdout.write(`${lines.join("\n")}\n`);
 }
 
-function parseArgs(argv) {
+function requireOptionValue(option, next) {
+  if (next === undefined || next.startsWith("--")) {
+    throw new Error(`${option} requires a value`);
+  }
+
+  return next;
+}
+
+function parseIntegerOption(option, value) {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 0) {
+    throw new Error(`${option} requires a non-negative integer`);
+  }
+
+  return parsed;
+}
+
+export function parseArgs(argv) {
   const args = {
     command: argv[2]
   };
@@ -72,50 +90,53 @@ function parseArgs(argv) {
 
     switch (current) {
       case "--config":
-        args.configPath = next;
+        args.configPath = requireOptionValue(current, next);
         index += 1;
         break;
       case "--preset":
-        args.preset = next;
+        args.preset = requireOptionValue(current, next);
         index += 1;
         break;
       case "--task":
-        args.task = next;
+        args.task = requireOptionValue(current, next);
         index += 1;
         break;
       case "--task-file":
-        args.taskFile = next;
+        args.taskFile = requireOptionValue(current, next);
         index += 1;
         break;
       case "--workspace":
-        args.workspaceDir = next;
+        args.workspaceDir = requireOptionValue(current, next);
         index += 1;
         break;
       case "--artifacts":
-        args.artifactsDir = next;
+        args.artifactsDir = requireOptionValue(current, next);
         index += 1;
         break;
       case "--max-rounds":
-        args.maxPlanRounds = Number(next);
+        args.maxPlanRounds = parseIntegerOption(current, requireOptionValue(current, next));
         index += 1;
         break;
       case "--max-review-rounds":
-        args.maxReviewRounds = Number(next);
+        args.maxReviewRounds = parseIntegerOption(
+          current,
+          requireOptionValue(current, next)
+        );
         index += 1;
         break;
       case "--skip-preflight":
         args.skipPreflight = true;
         break;
       case "--run":
-        args.run = next;
+        args.run = requireOptionValue(current, next);
         index += 1;
         break;
       case "--answers":
-        args.answers = next;
+        args.answers = requireOptionValue(current, next);
         index += 1;
         break;
       case "--answers-file":
-        args.answersFile = next;
+        args.answersFile = requireOptionValue(current, next);
         index += 1;
         break;
       case "--json":
@@ -271,6 +292,16 @@ function writeSummaryOutput(summary, options = {}) {
   process.stdout.write(renderRunSummary(summary, { verbose: options.verbose }));
 }
 
+function writeSummaryWithHints(summary, options = {}) {
+  writeSummaryOutput(summary, options);
+  if (summary.status === "waiting_for_user") {
+    process.stderr.write(renderWaitingForUserHint(summary));
+  }
+  if (summary.status === "review_changes_requested") {
+    process.stderr.write(renderContinueHint(summary));
+  }
+}
+
 async function main() {
   const args = parseArgs(process.argv);
 
@@ -306,13 +337,7 @@ async function main() {
       summary = await runInteractiveAnswerFlow(runPath, onProgress);
     }
 
-    writeSummaryOutput(summary, { json: args.json, verbose: args.verbose });
-    if (summary.status === "waiting_for_user") {
-      process.stderr.write(renderWaitingForUserHint(summary));
-    }
-    if (summary.status === "review_changes_requested") {
-      process.stderr.write(renderContinueHint(summary));
-    }
+    writeSummaryWithHints(summary, { json: args.json, verbose: args.verbose });
     return;
   }
 
@@ -333,13 +358,7 @@ async function main() {
       return;
     }
 
-    writeSummaryOutput(summary, { json: args.json, verbose: args.verbose });
-    if (summary.status === "waiting_for_user") {
-      process.stderr.write(renderWaitingForUserHint(summary));
-    }
-    if (summary.status === "review_changes_requested") {
-      process.stderr.write(renderContinueHint(summary));
-    }
+    writeSummaryWithHints(summary, { json: args.json, verbose: args.verbose });
     return;
   }
 
@@ -360,13 +379,7 @@ async function main() {
       return;
     }
 
-    writeSummaryOutput(summary, { json: args.json, verbose: args.verbose });
-    if (summary.status === "waiting_for_user") {
-      process.stderr.write(renderWaitingForUserHint(summary));
-    }
-    if (summary.status === "review_changes_requested") {
-      process.stderr.write(renderContinueHint(summary));
-    }
+    writeSummaryWithHints(summary, { json: args.json, verbose: args.verbose });
     return;
   }
 
@@ -414,16 +427,16 @@ async function main() {
     return;
   }
 
-  writeSummaryOutput(summary, { json: args.json, verbose: args.verbose });
-  if (summary.status === "waiting_for_user") {
-    process.stderr.write(renderWaitingForUserHint(summary));
-  }
-  if (summary.status === "review_changes_requested") {
-    process.stderr.write(renderContinueHint(summary));
-  }
+  writeSummaryWithHints(summary, { json: args.json, verbose: args.verbose });
 }
 
-main().catch((error) => {
-  process.stderr.write(`${error.message}\n`);
-  process.exitCode = 1;
-});
+const isDirectExecution = process.argv[1]
+  ? import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href
+  : false;
+
+if (isDirectExecution) {
+  main().catch((error) => {
+    process.stderr.write(`${error.message}\n`);
+    process.exitCode = 1;
+  });
+}

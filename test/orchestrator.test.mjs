@@ -242,6 +242,7 @@ test("loadConfig can build a runnable config from a preset without a config file
   assert.equal(config.roles.executor.provider, "codex-cli");
   assert.equal(config.roles.executor.sandbox, "workspace-write");
   assert.equal(config.workspaceDir, "/tmp/demo-workspace");
+  assert.equal(config.maxAgentCallMs, 300000);
 });
 
 test("balanced preset gives Claude executor non-interactive validation permissions", async () => {

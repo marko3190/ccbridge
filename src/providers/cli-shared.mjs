@@ -94,6 +94,7 @@ export async function runCommand({
   stdinText,
   rawLogPrefix,
   runDir,
+  timeoutMs = 300000,
   onProgress,
   progressContext
 }) {
@@ -102,8 +103,11 @@ export async function runCommand({
   const stdoutChunks = [];
   const stderrChunks = [];
   let spawnError;
+  let timedOut = false;
   const startedAt = Date.now();
   let heartbeat;
+  let timeoutHandle;
+  let killHandle;
 
   const exitCode = await new Promise((resolve) => {
     const child = spawn(command, args, {
@@ -115,11 +119,26 @@ export async function runCommand({
     child.stderr.on("data", (chunk) => stderrChunks.push(chunk));
     child.on("error", (error) => {
       spawnError = error;
+      if (heartbeat) {
+        clearInterval(heartbeat);
+      }
+      if (timeoutHandle) {
+        clearTimeout(timeoutHandle);
+      }
+      if (killHandle) {
+        clearTimeout(killHandle);
+      }
       resolve(null);
     });
     child.on("close", (code) => {
       if (heartbeat) {
         clearInterval(heartbeat);
+      }
+      if (timeoutHandle) {
+        clearTimeout(timeoutHandle);
+      }
+      if (killHandle) {
+        clearTimeout(killHandle);
       }
       resolve(code);
     });
@@ -141,6 +160,18 @@ export async function runCommand({
         ...progressContext
       });
     }, 10000);
+
+    if (Number.isFinite(timeoutMs) && timeoutMs > 0) {
+      timeoutHandle = setTimeout(() => {
+        timedOut = true;
+        child.kill("SIGTERM");
+        killHandle = setTimeout(() => {
+          child.kill("SIGKILL");
+        }, 5000);
+        killHandle.unref?.();
+      }, timeoutMs);
+      timeoutHandle.unref?.();
+    }
 
     if (typeof stdinText === "string") {
       child.stdin.write(stdinText, "utf8");
@@ -170,6 +201,7 @@ export async function runCommand({
       [
         `Command failed: ${command} ${args.join(" ")}`,
         `Exit code: ${exitCode ?? "spawn_error"}`,
+        timedOut ? `Timed out after ${timeoutMs}ms` : null,
         spawnError ? `Spawn error: ${spawnError.message}` : null,
         stderr.slice(0, 1200) || stdout.slice(0, 1200)
       ]

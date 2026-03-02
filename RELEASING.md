@@ -24,7 +24,7 @@ npm version minor
 
 Use `major` only when the release intentionally breaks compatibility.
 
-## v0.1.0 Checklist
+## Release Checklist
 
 Before tagging:
 
@@ -36,9 +36,9 @@ Before tagging:
 - confirm README, `CONTRIBUTING.md`, `SECURITY.md`, and `LICENSE` are up to date
 - confirm the default preset and example config still match the documented behavior
 
-## Suggested Release Notes For v0.1.0
+## Suggested Release Notes
 
-`v0.1.0` should communicate that `ccbridge` already supports:
+Your release notes should communicate that `ccbridge` already supports:
 
 - planner / critic / executor / reviewer orchestration
 - structured human handoff with `needs_input`
@@ -54,13 +54,13 @@ It should also be honest that the project is still early and meant for trusted l
 Example:
 
 ```bash
-git tag v0.1.0
-git push origin v0.1.0
+npm version patch
+git push origin main --follow-tags
 ```
 
 ## GitHub Release
 
-For the first GitHub release, include:
+Include:
 
 - what the project is
 - who it is for

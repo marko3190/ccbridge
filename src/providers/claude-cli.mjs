@@ -12,7 +12,16 @@ export class ClaudeCliProvider {
     this.extraArgs = config.extraArgs ?? [];
   }
 
-  async run({ operation, prompt, schema, workspaceDir, runDir, roleName, onProgress }) {
+  async run({
+    operation,
+    prompt,
+    schema,
+    workspaceDir,
+    runDir,
+    roleName,
+    maxAgentCallMs,
+    onProgress
+  }) {
     const args = [
       "--print",
       "--output-format",
@@ -44,6 +53,7 @@ export class ClaudeCliProvider {
       cwd: workspaceDir,
       rawLogPrefix: `${roleName}-${operation}`,
       runDir,
+      timeoutMs: maxAgentCallMs,
       onProgress,
       progressContext: {
         roleName,
