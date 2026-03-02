@@ -1,9 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, writeFile } from "node:fs/promises";
+import { execFile as execFileCallback } from "node:child_process";
+import { mkdtemp, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { promisify } from "node:util";
 import { parseArgs, resolveTask } from "../src/cli.mjs";
+
+const execFile = promisify(execFileCallback);
 
 test("parseArgs rejects missing values for paired options", () => {
   assert.throws(
@@ -24,6 +28,39 @@ test("parseArgs supports completion shell selection", () => {
 
   assert.equal(args.command, "completion");
   assert.equal(args.shell, "zsh");
+});
+
+test("setup command is accepted and configures shell completion", async () => {
+  const homeDir = await mkdtemp(path.join(os.tmpdir(), "ccbridge-home-"));
+  const cliPath = path.resolve("src/cli.mjs");
+
+  const result = await execFile(process.execPath, [cliPath, "setup", "zsh"], {
+    cwd: path.resolve("."),
+    env: {
+      ...process.env,
+      HOME: homeDir,
+      CCBRIDGE_SKIP_UPDATE_CHECK: "1"
+    }
+  });
+
+  assert.match(result.stdout, /Configured zsh completion for ccbridge/);
+});
+
+test("cli runs correctly when invoked through a symlink", async () => {
+  const tempDir = await mkdtemp(path.join(os.tmpdir(), "ccbridge-link-"));
+  const linkedCliPath = path.join(tempDir, "ccbridge");
+  await symlink(path.resolve("src/cli.mjs"), linkedCliPath);
+
+  const result = await execFile(process.execPath, [linkedCliPath, "--help"], {
+    cwd: path.resolve("."),
+    env: {
+      ...process.env,
+      CCBRIDGE_SKIP_UPDATE_CHECK: "1"
+    }
+  });
+
+  assert.match(result.stdout, /Usage:/);
+  assert.match(result.stdout, /ccbridge setup zsh/);
 });
 
 test("resolveTask loads @file aliases from disk", async () => {

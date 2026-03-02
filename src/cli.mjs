@@ -3,8 +3,8 @@
 import { spawn } from "node:child_process";
 import path from "node:path";
 import process from "node:process";
-import { access, readFile } from "node:fs/promises";
-import { pathToFileURL } from "node:url";
+import { access, readFile, realpath } from "node:fs/promises";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import {
   promptForAnswersInteractively,
   renderContinueHint,
@@ -381,9 +381,16 @@ async function main() {
   }
 
   if (
-    !["run", "doctor", "presets", "completion", "answer", "resume", "continue"].includes(
-      args.command
-    )
+    ![
+      "run",
+      "doctor",
+      "presets",
+      "completion",
+      "setup",
+      "answer",
+      "resume",
+      "continue"
+    ].includes(args.command)
   ) {
     throw new Error(`Unsupported command: ${args.command}`);
   }
@@ -514,11 +521,19 @@ async function main() {
   writeSummaryWithHints(summary, { json: args.json, verbose: args.verbose });
 }
 
-const isDirectExecution = process.argv[1]
-  ? import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href
-  : false;
+async function isDirectExecution() {
+  if (!process.argv[1]) {
+    return false;
+  }
 
-if (isDirectExecution) {
+  const invokedPath = await realpath(path.resolve(process.argv[1]));
+  const currentModulePath = await realpath(fileURLToPath(import.meta.url));
+  return invokedPath === currentModulePath;
+}
+
+const directExecution = await isDirectExecution();
+
+if (directExecution) {
   main().catch((error) => {
     process.stderr.write(`${error.message}\n`);
     process.exitCode = 1;

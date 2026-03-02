@@ -8,8 +8,14 @@ test("renderZshCompletion includes commands, presets, and @task file completion"
   assert.match(script, /#compdef ccbridge/);
   assert.match(script, /completion:Print shell completion setup/);
   assert.match(script, /'balanced:/);
-  assert.match(script, /compset -P '@'/);
+  assert.match(script, /local prev_word="\$words\[CURRENT-1\]"/);
+  assert.match(script, /case "\$words\[2\]:\$prev_word" in/);
+  assert.match(script, /run:--preset\|doctor:--preset/);
+  assert.match(script, /run:--task/);
+  assert.match(script, /if compset -P '@'; then/);
   assert.match(script, /--task\[task text or @file\]/);
+  assert.match(script, /_arguments -C -s/);
+  assert.match(script, /case "\$state" in\s+preset\)/);
 });
 
 test("renderBashCompletion includes commands and @task file completion", () => {

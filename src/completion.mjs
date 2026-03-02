@@ -19,6 +19,7 @@ export function renderZshCompletion() {
   return `#compdef ccbridge
 
 local context state line
+local prev_word="$words[CURRENT-1]"
 typeset -A opt_args
 
 local -a _ccbridge_commands
@@ -39,8 +40,7 @@ ${presetEntries}
 )
 
 _ccbridge_task_value() {
-  if [[ "$PREFIX" == @* ]]; then
-    compset -P '@'
+  if compset -P '@'; then
     _files
     return
   fi
@@ -48,9 +48,20 @@ _ccbridge_task_value() {
   _message 'task text'
 }
 
+case "$words[2]:$prev_word" in
+  run:--preset|doctor:--preset)
+    _describe -t presets 'ccbridge preset' _ccbridge_presets
+    return
+    ;;
+  run:--task)
+    _ccbridge_task_value
+    return
+    ;;
+esac
+
 case "$words[2]" in
   run)
-    _arguments -s \\
+    _arguments -C -s \\
       '--config[path to ccbridge config JSON]:config file:_files' \\
       '--preset[preset role layout]:preset:->preset' \\
       '--task[task text or @file]:task:_ccbridge_task_value' \\
@@ -62,6 +73,13 @@ case "$words[2]" in
       '--skip-preflight[skip auth and binary checks before run]' \\
       '--json[print machine-readable JSON]' \\
       '--verbose[include extra human summary detail]' && return
+    case "$state" in
+      preset)
+        _describe -t presets 'ccbridge preset' _ccbridge_presets
+        return
+        ;;
+    esac
+    return
     ;;
   answer|resume|continue)
     _arguments -s \\
@@ -72,9 +90,16 @@ case "$words[2]" in
       '--verbose[include extra human summary detail]' && return
     ;;
   doctor)
-    _arguments -s \\
+    _arguments -C -s \\
       '--config[path to ccbridge config JSON]:config file:_files' \\
       '--preset[preset role layout]:preset:->preset' && return
+    case "$state" in
+      preset)
+        _describe -t presets 'ccbridge preset' _ccbridge_presets
+        return
+        ;;
+    esac
+    return
     ;;
   presets)
     _arguments -s && return
