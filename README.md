@@ -58,7 +58,7 @@ Requirements:
 Once published, install globally with:
 
 ```bash
-npm install -g ccbridge
+npm install -g @marko3190/ccbridge
 ```
 
 Then verify:
@@ -67,6 +67,8 @@ Then verify:
 ccbridge --help
 ccbridge doctor
 ```
+
+The npm package is scoped, but the installed shell command remains `ccbridge`.
 
 You have two supported ways to use `ccbridge`.
 

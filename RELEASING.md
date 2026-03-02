@@ -1,6 +1,6 @@
 # Releasing ccbridge
 
-This file is a lightweight checklist for preparing releases, starting with `v0.1.0`.
+This file is a lightweight checklist for preparing releases.
 
 ## v0.1.0 Checklist
 
@@ -48,9 +48,19 @@ For the first GitHub release, include:
 
 ## After Release
 
-After publishing `v0.1.0`, useful next steps are:
+After publishing a release, useful next steps are:
 
 - add GitHub Topics
 - add a short repo description
 - consider publishing to npm
 - collect feedback from a few real users before widening scope
+
+## npm Publish
+
+`ccbridge` is published as the scoped package `@marko3190/ccbridge`, while the installed CLI command remains `ccbridge`.
+
+Example:
+
+```bash
+npm publish --access=public
+```

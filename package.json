@@ -1,6 +1,6 @@
 {
-  "name": "ccbridge",
-  "version": "0.1.1",
+  "name": "@marko3190/ccbridge",
+  "version": "0.1.2",
   "description": "Bridge Claude Code and Codex through a planner-critic-executor-reviewer loop.",
   "keywords": [
     "ai",
@@ -14,7 +14,7 @@
   ],
   "type": "module",
   "bin": {
-    "ccbridge": "./src/cli.mjs"
+    "ccbridge": "src/cli.mjs"
   },
   "files": [
     "src",
