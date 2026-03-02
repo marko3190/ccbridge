@@ -108,3 +108,13 @@ test("resolveTask supports escaping literal @ with @@ prefix", async () => {
 
   assert.equal(task, "@mention this literally");
 });
+
+test("resolveTask rejects bare @ task aliases without a file path", async () => {
+  await assert.rejects(
+    () =>
+      resolveTask({
+        task: "@"
+      }),
+    /--task @ requires a file path after @/
+  );
+});
