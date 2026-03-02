@@ -10,7 +10,12 @@ import {
   loadRunState,
   runOrchestration
 } from "../src/orchestrator.mjs";
-import { buildCritiquePrompt, buildPlanPrompt, buildReviewPrompt } from "../src/prompts.mjs";
+import {
+  buildCritiquePrompt,
+  buildExecutionPrompt,
+  buildPlanPrompt,
+  buildReviewPrompt
+} from "../src/prompts.mjs";
 
 function createMockConfig(baseDir) {
   return {
@@ -183,6 +188,8 @@ test("plan prompt asks for explicit revision notes and includes critique history
   assert.match(prompt, /Always populate revision_notes/);
   assert.match(prompt, /Critique history/);
   assert.match(prompt, /validation-gap/);
+  assert.match(prompt, /Do not silently expand the task from one reported instance to every similar instance you discover/);
+  assert.match(prompt, /ask the user whether to keep the fix narrow or widen it/);
 });
 
 test("critique prompt emphasizes high blocking threshold and final-round convergence", () => {
@@ -230,6 +237,8 @@ test("critique prompt emphasizes high blocking threshold and final-round converg
   assert.match(prompt, /Use a high bar for blocking issues/);
   assert.match(prompt, /This is the final planning round/);
   assert.match(prompt, /Approve when the plan is good enough to execute safely/);
+  assert.match(prompt, /treat that as scope drift unless the widening is obviously part of the same minimal fix/);
+  assert.match(prompt, /prefer needs_input over silently approving the wider scope/);
 });
 
 test("loadConfig can build a runnable config from a preset without a config file", async () => {
@@ -334,4 +343,29 @@ test("review prompt adds a soft targeted checklist for persistence and resolved 
   assert.match(prompt, /matches the resolved user decisions exactly/);
   assert.match(prompt, /hydration from persisted storage/);
   assert.match(prompt, /silent failures when the UI ignores a user action without feedback/);
+});
+
+test("execution prompt asks for user input before widening scope to similar bugs", () => {
+  const prompt = buildExecutionPrompt({
+    task: "Fix the reported leading-space search bug in one admin view.",
+    workspaceDir: "/tmp/repo",
+    plan: {
+      goal: "Fix one reported admin search bug.",
+      revision_notes: [],
+      assumptions: [],
+      steps: ["Trim the reported search input on frontend and backend."],
+      files_to_touch: ["pages/admin/example.vue", "server/api/admin/example/index.get.js"],
+      risks: [],
+      tests: ["Run npm run build"],
+      acceptance_criteria: [],
+      open_questions: [],
+      status: "approved"
+    },
+    executionAttempt: 1,
+    maxReviewRounds: 1,
+    reviewHistory: []
+  });
+
+  assert.match(prompt, /If you discover the same bug or pattern in additional places beyond the approved plan, do not silently widen the implementation/);
+  assert.match(prompt, /use needs_input so the user can decide between fixing only the approved scope and broadening the task/);
 });

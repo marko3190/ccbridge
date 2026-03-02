@@ -178,6 +178,9 @@ export function buildPlanPrompt({
     "Be concrete about files, tests, risks, and acceptance criteria.",
     "Optimize for convergence: preserve the valid core of the prior plan and patch blockers instead of rewriting the approach from scratch.",
     "Keep the plan minimal but executable. Do not add speculative work just to preempt every hypothetical objection.",
+    "Do not silently expand the task from one reported instance to every similar instance you discover.",
+    "If repository inspection reveals the same bug or cleanup opportunity in additional views, endpoints, or flows beyond the obvious minimal scope, ask the user whether to keep the fix narrow or widen it.",
+    "Only widen the plan without asking when the extra change is an obvious part of the same minimal fix and not a separate product or scope decision.",
     "Always populate revision_notes. On round 1 use an empty array. On later rounds include one entry for every blocking issue from the latest critique, reusing the exact issue_id and explaining how it was addressed or why it was deferred.",
     "If a prior blocker should become non-blocking, say so explicitly in revision_notes and keep the plan focused on the primary task.",
     "If critique is supplied, revise the previous plan instead of replacing the task with a brand new approach.",
@@ -239,6 +242,8 @@ export function buildCritiquePrompt({
     "If the planner addressed a previous blocking issue well enough, do not reopen it with a renamed variant.",
     "Prefer reusing existing issue ids when the same blocker persists.",
     "If the plan is implementable and the remaining concerns are survivable or reviewable later, approve it and move those concerns to non_blocking_issues.",
+    "If the planner expands the task to additional views, endpoints, or flows that the user did not clearly ask for, treat that as scope drift unless the widening is obviously part of the same minimal fix.",
+    "If the right next step is a user choice between a narrow fix and a broader sweep, prefer needs_input over silently approving the wider scope.",
     buildInputProtocolInstructions(),
     "Return JSON only that matches the provided schema."
   ];
@@ -298,6 +303,8 @@ export function buildExecutionPrompt({
     "Implement the approved plan in the workspace.",
     "Run relevant validation where practical.",
     "Avoid scope creep.",
+    "If you discover the same bug or pattern in additional places beyond the approved plan, do not silently widen the implementation.",
+    "When that happens, use needs_input so the user can decide between fixing only the approved scope and broadening the task.",
     "If you must deviate from the plan, record the deviation in the JSON response.",
     "If review feedback is supplied, fix the blocking findings with the smallest safe change set instead of rewriting completed work.",
     "Treat non-blocking findings as optional unless they naturally fit into the repair.",
