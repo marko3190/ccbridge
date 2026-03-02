@@ -52,6 +52,8 @@ The main parts of the project are:
 - `src/cli.mjs`: user-facing terminal workflow
 - `test/`: regression coverage
 
+If you are adding a provider, read [docs/how-to-add-a-provider.md](./docs/how-to-add-a-provider.md) before editing `src/providers/`.
+
 If you change one of these areas, look for impact on the others.
 
 Example:

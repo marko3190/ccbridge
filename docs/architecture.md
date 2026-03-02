@@ -89,6 +89,8 @@ Responsibilities:
 
 Provider adapters are intentionally thin. Most orchestration policy lives above them.
 
+If you want to add a new provider, start with [How To Add A Provider](./how-to-add-a-provider.md).
+
 ## Run Lifecycle
 
 Each run starts with a new directory:

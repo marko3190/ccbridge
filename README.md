@@ -56,7 +56,6 @@ Requirements:
 Optional one-time setup if you want `ccbridge` in your shell:
 
 ```bash
-cd /Users/mklejnglas/ccbridge
 npm link
 ```
 
@@ -97,6 +96,7 @@ npm start -- run \
 Additional documentation:
 
 - [Architecture](./docs/architecture.md)
+- [How To Add A Provider](./docs/how-to-add-a-provider.md)
 - [Security Model](./docs/security-model.md)
 - [First Run Guide](./docs/guides/first-run.md)
 - [Releasing](./RELEASING.md)
