@@ -50,9 +50,9 @@ In a healthy run you will see terminal progress such as:
 ```text
 Starting run 2026-03-01T21-00-00.000Z
 
-Planner round 1 started
-  planner is running plan...
-  still waiting on planner plan (10s elapsed)
+Planner (Claude) round 1 started
+  done: Planner (Claude) is drafting the implementation plan in 38s
+  plan ready: 3 steps, 2 files, 1 test
 ```
 
 ## 4. If The Agent Needs Clarification
@@ -78,12 +78,31 @@ npm start -- answer --run <runId>
 
 At the end you will get a final summary such as:
 
-```json
-{
-  "status": "completed",
-  "approved": true,
-  "reviewVerdict": "pass"
-}
+```text
+Run completed successfully
+
+Changes implemented: yes
+Plan approved: yes
+Plan rounds: 1
+Review rounds: 1
+Review verdict: pass
+Validation commands run: 2
+Files changed:
+- src/App.jsx
+- src/components/FeaturePanel.jsx
+Artifacts: /absolute/path/to/target-repo/.runs/<runId>
+```
+
+If you need machine-readable output for scripts, use:
+
+```bash
+npm start -- run ... --json
+```
+
+If you want a more detailed human summary, including which agent handled each role and the key artifact paths, use:
+
+```bash
+npm start -- run ... --verbose
 ```
 
 Possible terminal statuses:

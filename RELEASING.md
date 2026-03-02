@@ -20,8 +20,8 @@ Before tagging:
 
 - planner / critic / executor / reviewer orchestration
 - structured human handoff with `needs_input`
-- resume and answer flows
-- terminal progress and heartbeat feedback
+- resume, answer, and continue-after-review flows
+- role-aware terminal progress plus human-readable final summaries
 - real `claude` + `codex` CLI runs
 - run artifacts for debugging
 

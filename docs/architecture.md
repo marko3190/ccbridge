@@ -30,7 +30,9 @@ Responsibilities:
 - load config or presets
 - run preflight checks
 - start, resume, or answer runs
+- continue a run after exhausted review repair rounds
 - render terminal progress
+- render final human summaries or `--json` output
 - hand off to interactive user input when needed
 
 ### Orchestrator
@@ -83,7 +85,7 @@ Responsibilities:
 - execute CLI commands
 - write raw logs
 - parse structured output
-- emit heartbeat progress while a provider call is in flight
+- emit provider progress signals while a call is in flight
 
 Provider adapters are intentionally thin. Most orchestration policy lives above them.
 
@@ -126,7 +128,7 @@ Important files:
 - `raw/<role>-<operation>.stdout.log`
 - `raw/<role>-<operation>.stderr.log`
 
-`ccbridge` is intentionally artifact-heavy because agent orchestration is difficult to debug without durable state.
+`ccbridge` is intentionally artifact-heavy because agent orchestration is difficult to debug without durable state. The CLI's human-readable terminal summary is derived from the same saved state, while `--json` exposes the machine-readable form directly.
 
 ## Human Handoff
 
@@ -147,13 +149,15 @@ Current progress events include:
 
 - run started
 - run resumed
+- run continued after exhausted review repair rounds
 - stage start
 - provider call start
 - provider heartbeat
 - provider call completion
+- stage result summaries
 - input requested
 
-This is intentionally simple text output, not a dashboard.
+The CLI renders those events as role-aware terminal output such as `Planner (Claude)` or `Reviewer (Codex)`. Interactive terminals get a live spinner/status line; non-interactive terminals fall back to heartbeat lines.
 
 ## Design Constraints
 

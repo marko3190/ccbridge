@@ -9,6 +9,7 @@ import {
   renderContinueHint,
   renderWaitingForUserHint
 } from "./answer-ui.mjs";
+import { buildRoleAgentMap } from "./agent-labels.mjs";
 import { loadConfig } from "./config.mjs";
 import {
   answerAndResumeRun,
@@ -18,7 +19,9 @@ import {
   runOrchestration
 } from "./orchestrator.mjs";
 import { formatPreflightReport, runPreflight } from "./preflight.mjs";
+import { createProgressReporter } from "./progress-reporter.mjs";
 import { getPresetNames, getPresetSummaries } from "./presets.mjs";
+import { renderRunSummary } from "./summary-output.mjs";
 
 function printHelp() {
   const lines = [
@@ -44,6 +47,8 @@ function printHelp() {
     "  --run <runId|runDir>   Run directory or run id for answer/resume.",
     "  --answers <json>       Inline JSON answers map for non-interactive ccbridge answer.",
     "  --answers-file <path>  File containing a JSON answers map for non-interactive ccbridge answer.",
+    "  --json                 Print machine-readable JSON instead of the human summary.",
+    "  --verbose              Include extra detail in the human summary output.",
     "  -h, --help             Show this help."
   ];
 
@@ -112,6 +117,12 @@ function parseArgs(argv) {
       case "--answers-file":
         args.answersFile = next;
         index += 1;
+        break;
+      case "--json":
+        args.json = true;
+        break;
+      case "--verbose":
+        args.verbose = true;
         break;
       case "-h":
       case "--help":
@@ -203,76 +214,6 @@ function printPresets() {
   process.stdout.write(`${lines.join("\n")}\n`);
 }
 
-function formatDurationMs(durationMs) {
-  const totalSeconds = Math.max(1, Math.round(durationMs / 1000));
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-
-  if (!minutes) {
-    return `${totalSeconds}s`;
-  }
-
-  return `${minutes}m ${seconds}s`;
-}
-
-function createProgressReporter(output = process.stderr) {
-  return (event) => {
-    switch (event.type) {
-      case "run_started":
-        output.write(`\nStarting run ${event.runId}\n`);
-        break;
-      case "run_resumed":
-        output.write(`\nResuming run ${event.runId} at stage ${event.resumedFrom}\n`);
-        break;
-      case "run_continued":
-        output.write(
-          `\nContinuing run ${event.runId} with one extra repair round (attempt ${event.nextExecutionAttempt}, max repair rounds now ${event.maxReviewRounds})\n`
-        );
-        break;
-      case "stage_start":
-        if (event.stage === "plan") {
-          output.write(`\nPlanner round ${event.planRound} started\n`);
-          return;
-        }
-
-        if (event.stage === "critique") {
-          output.write(`\nCritic review for plan round ${event.planRound} started\n`);
-          return;
-        }
-
-        if (event.stage === "execute") {
-          output.write(`\nExecutor attempt ${event.executionAttempt} started\n`);
-          return;
-        }
-
-        if (event.stage === "review") {
-          output.write(`\nReviewer pass ${event.reviewRound} started\n`);
-        }
-        break;
-      case "agent_call_start":
-        output.write(`  ${event.roleName} is running ${event.operation}...\n`);
-        break;
-      case "agent_call_heartbeat":
-        output.write(
-          `  still waiting on ${event.roleName} ${event.operation} (${formatDurationMs(event.elapsedMs)} elapsed)\n`
-        );
-        break;
-      case "agent_call_done":
-        output.write(
-          `  ${event.roleName} ${event.operation} finished in ${formatDurationMs(event.elapsedMs)}\n`
-        );
-        break;
-      case "input_requested":
-        output.write(
-          `  ${event.roleName} needs ${event.questionCount} user answer${event.questionCount === 1 ? "" : "s"}\n`
-        );
-        break;
-      default:
-        break;
-    }
-  };
-}
-
 function canUseInteractiveTerminal() {
   return Boolean(process.stdin.isTTY && process.stdout.isTTY);
 }
@@ -321,6 +262,15 @@ async function runInteractiveAnswerFlow(runPath, onProgress) {
   }
 }
 
+function writeSummaryOutput(summary, options = {}) {
+  if (options.json) {
+    process.stdout.write(`${JSON.stringify(summary, null, 2)}\n`);
+    return;
+  }
+
+  process.stdout.write(renderRunSummary(summary, { verbose: options.verbose }));
+}
+
 async function main() {
   const args = parseArgs(process.argv);
 
@@ -340,7 +290,10 @@ async function main() {
 
   if (args.command === "answer") {
     const runPath = await resolveRunPath(args.run);
-    const onProgress = createProgressReporter();
+    const state = await loadRunState(runPath);
+    const onProgress = createProgressReporter(process.stderr, {
+      roleAgents: buildRoleAgentMap(state.config)
+    });
     let summary;
 
     if (args.answers || args.answersFile) {
@@ -353,7 +306,7 @@ async function main() {
       summary = await runInteractiveAnswerFlow(runPath, onProgress);
     }
 
-    process.stdout.write(`${JSON.stringify(summary, null, 2)}\n`);
+    writeSummaryOutput(summary, { json: args.json, verbose: args.verbose });
     if (summary.status === "waiting_for_user") {
       process.stderr.write(renderWaitingForUserHint(summary));
     }
@@ -365,9 +318,12 @@ async function main() {
 
   if (args.command === "resume") {
     const runPath = await resolveRunPath(args.run);
+    const state = await loadRunState(runPath);
     const summary = await resumeRun({
       runPath,
-      onProgress: createProgressReporter()
+      onProgress: createProgressReporter(process.stderr, {
+        roleAgents: buildRoleAgentMap(state.config)
+      })
     });
     if (summary.status === "waiting_for_user" && canUseInteractiveTerminal()) {
       process.stderr.write(
@@ -377,7 +333,7 @@ async function main() {
       return;
     }
 
-    process.stdout.write(`${JSON.stringify(summary, null, 2)}\n`);
+    writeSummaryOutput(summary, { json: args.json, verbose: args.verbose });
     if (summary.status === "waiting_for_user") {
       process.stderr.write(renderWaitingForUserHint(summary));
     }
@@ -389,9 +345,12 @@ async function main() {
 
   if (args.command === "continue") {
     const runPath = await resolveRunPath(args.run);
+    const state = await loadRunState(runPath);
     const summary = await continueReviewRun({
       runPath,
-      onProgress: createProgressReporter()
+      onProgress: createProgressReporter(process.stderr, {
+        roleAgents: buildRoleAgentMap(state.config)
+      })
     });
     if (summary.status === "waiting_for_user" && canUseInteractiveTerminal()) {
       process.stderr.write(
@@ -401,7 +360,7 @@ async function main() {
       return;
     }
 
-    process.stdout.write(`${JSON.stringify(summary, null, 2)}\n`);
+    writeSummaryOutput(summary, { json: args.json, verbose: args.verbose });
     if (summary.status === "waiting_for_user") {
       process.stderr.write(renderWaitingForUserHint(summary));
     }
@@ -439,10 +398,13 @@ async function main() {
   }
 
   const task = await resolveTask(args);
+  const onProgress = createProgressReporter(process.stderr, {
+    roleAgents: buildRoleAgentMap(config)
+  });
   const summary = await runOrchestration({
     config,
     task,
-    onProgress: createProgressReporter()
+    onProgress
   });
   if (summary.status === "waiting_for_user" && canUseInteractiveTerminal()) {
     process.stderr.write(
@@ -452,7 +414,7 @@ async function main() {
     return;
   }
 
-  process.stdout.write(`${JSON.stringify(summary, null, 2)}\n`);
+  writeSummaryOutput(summary, { json: args.json, verbose: args.verbose });
   if (summary.status === "waiting_for_user") {
     process.stderr.write(renderWaitingForUserHint(summary));
   }

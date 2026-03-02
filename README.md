@@ -165,6 +165,18 @@ If a run stopped because the reviewer still wants changes after the allowed repa
 ccbridge continue --run <runId>
 ```
 
+For machine-readable final output instead of the human summary:
+
+```bash
+ccbridge run ... --json
+```
+
+For a more detailed human summary, including the role-to-agent mapping and artifact file paths:
+
+```bash
+ccbridge run ... --verbose
+```
+
 Current behavior is human handoff only. `ccbridge` does not let one agent invent product decisions on behalf of the user.
 
 ## Terminal UX
@@ -172,9 +184,13 @@ Current behavior is human handoff only. `ccbridge` does not let one agent invent
 Long-running agent calls are noisy on purpose. `ccbridge` prints:
 
 - the current stage
-- which role is running
-- a heartbeat every 10 seconds while waiting
+- which role and agent are running, for example `Planner (Claude)` or `Reviewer (Codex)`
+- a live spinner/status line in interactive terminals
+- heartbeat lines every 10 seconds in non-interactive terminals
 - a completion line with elapsed time
+- a short stage summary after plan, critique, execute, and review
+
+At the end of a run, `ccbridge` prints a human-readable summary by default. Use `--json` for machine-readable output or `--verbose` for extra detail such as role-to-agent mapping and artifact file paths.
 
 That feedback is there so the terminal does not look frozen during long `claude` or `codex` calls.
 

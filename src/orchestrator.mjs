@@ -7,6 +7,7 @@ import {
   writeJson,
   writeText
 } from "./files.mjs";
+import { buildRoleAgentMap } from "./agent-labels.mjs";
 import {
   buildCritiquePrompt,
   buildExecutionPrompt,
@@ -111,6 +112,11 @@ function buildSummary(state, extra = {}) {
     executionStatus: state.execution?.status ?? null,
     reviewVerdict: state.review?.verdict ?? null,
     maxReviewRounds: state.config.maxReviewRounds,
+    roleAgents: buildRoleAgentMap(state.config),
+    filesChanged: state.execution?.files_changed ?? [],
+    testsRunCount: state.execution?.tests_run?.length ?? 0,
+    blockingFindingsCount: state.review?.blocking_findings?.length ?? 0,
+    nonBlockingFindingsCount: state.review?.non_blocking_findings?.length ?? 0,
     lastExecutionFile:
       state.executionAttempt && state.execution
         ? path.join(state.runDir, `execution.round-${state.executionAttempt}.json`)
@@ -223,6 +229,58 @@ function buildReviewContext(state) {
   };
 }
 
+function emitPlanResult(state, onProgress) {
+  onProgress?.({
+    type: "stage_result",
+    stage: "plan",
+    roleName: "planner",
+    planRound: state.planRound,
+    planStatus: state.plan?.status,
+    stepCount: state.plan?.steps?.length ?? 0,
+    fileCount: state.plan?.files_to_touch?.length ?? 0,
+    testCount: state.plan?.tests?.length ?? 0
+  });
+}
+
+function emitCritiqueResult(state, onProgress) {
+  onProgress?.({
+    type: "stage_result",
+    stage: "critique",
+    roleName: "critic",
+    planRound: state.planRound,
+    approved: state.critique?.approved ?? false,
+    blockingCount: state.critique?.blocking_issues?.length ?? 0,
+    nonBlockingCount: state.critique?.non_blocking_issues?.length ?? 0,
+    summary: state.critique?.summary ?? ""
+  });
+}
+
+function emitExecutionResult(state, onProgress) {
+  const testsRun = state.execution?.tests_run ?? [];
+  onProgress?.({
+    type: "stage_result",
+    stage: "execute",
+    roleName: "executor",
+    executionAttempt: state.executionAttempt,
+    fileCount: state.execution?.files_changed?.length ?? 0,
+    testsRunCount: testsRun.length,
+    summary: state.execution?.summary ?? ""
+  });
+}
+
+function emitReviewResult(state, onProgress) {
+  onProgress?.({
+    type: "stage_result",
+    stage: "review",
+    roleName: "reviewer",
+    reviewRound: state.executionAttempt,
+    verdict: state.review?.verdict ?? "changes_requested",
+    blockingCount: state.review?.blocking_findings?.length ?? 0,
+    nonBlockingCount: state.review?.non_blocking_findings?.length ?? 0,
+    summary: state.review?.summary ?? ""
+  });
+}
+
 async function runPlanStage(state, providers, onProgress) {
   const context = buildPlanContext(state);
   onProgress?.({
@@ -254,6 +312,7 @@ async function runPlanStage(state, providers, onProgress) {
 
   state.plan = response.result;
   await writeJson(path.join(state.runDir, `plan.round-${state.planRound}.json`), state.plan);
+  emitPlanResult(state, onProgress);
   state.stage = "critique";
   state.status = "running";
   await clearPendingInputArtifacts(state.runDir);
@@ -302,6 +361,7 @@ async function runCritiqueStage(state, providers, onProgress) {
     blocking_issues: state.critique.blocking_issues,
     non_blocking_issues: state.critique.non_blocking_issues
   });
+  emitCritiqueResult(state, onProgress);
 
   if (state.critique.approved) {
     state.plan.status = "approved";
@@ -362,6 +422,7 @@ async function runExecuteStage(state, providers, onProgress) {
     state.execution
   );
   await writeJson(path.join(state.runDir, "execution.json"), state.execution);
+  emitExecutionResult(state, onProgress);
   state.stage = "review";
   state.status = "running";
   await clearPendingInputArtifacts(state.runDir);
@@ -411,6 +472,7 @@ async function runReviewStage(state, providers, onProgress) {
     state.review
   );
   await writeJson(path.join(state.runDir, "review.json"), state.review);
+  emitReviewResult(state, onProgress);
 
   if (state.review.verdict === "pass") {
     state.status = "completed";

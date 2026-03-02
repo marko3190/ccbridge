@@ -1,0 +1,92 @@
+function yesNo(value) {
+  return value ? "yes" : "no";
+}
+
+function formatRoleAgents(roleAgents = {}) {
+  const lines = ["Agents:"];
+
+  for (const roleName of ["planner", "critic", "executor", "reviewer"]) {
+    const entry = roleAgents?.[roleName];
+    if (!entry) {
+      continue;
+    }
+
+    const providerTail = entry.provider ? ` [${entry.provider}]` : "";
+    const modelTail = entry.model ? ` model=${entry.model}` : "";
+    lines.push(`- ${entry.role}: ${entry.agent}${providerTail}${modelTail}`);
+  }
+
+  return lines;
+}
+
+function formatFiles(files = []) {
+  if (!files.length) {
+    return ["Files changed: none reported"];
+  }
+
+  return ["Files changed:", ...files.map((file) => `- ${file}`)];
+}
+
+export function renderRunSummary(summary, options = {}) {
+  if (!summary || typeof summary !== "object") {
+    return "";
+  }
+
+  const lines = [];
+
+  switch (summary.status) {
+    case "completed":
+      lines.push("Run completed successfully");
+      break;
+    case "plan_rejected":
+      lines.push("Run stopped: the plan never reached approval");
+      break;
+    case "review_changes_requested":
+      lines.push("Run stopped: review still requests changes");
+      break;
+    case "waiting_for_user":
+      lines.push("Run paused and needs user input");
+      break;
+    default:
+      lines.push(`Run status: ${summary.status}`);
+      break;
+  }
+
+  lines.push("");
+  lines.push(`Changes implemented: ${yesNo(summary.executionStatus === "completed")}`);
+  lines.push(`Plan approved: ${yesNo(summary.approved)}`);
+  lines.push(`Plan rounds: ${summary.roundsUsed}`);
+  lines.push(`Review rounds: ${summary.reviewRoundsUsed}`);
+
+  if (summary.reviewVerdict) {
+    lines.push(`Review verdict: ${summary.reviewVerdict}`);
+  }
+
+  if (typeof summary.blockingFindingsCount === "number" && summary.status !== "completed") {
+    lines.push(`Blocking findings: ${summary.blockingFindingsCount}`);
+  }
+
+  if (typeof summary.testsRunCount === "number" && summary.executionStatus === "completed") {
+    lines.push(`Validation commands run: ${summary.testsRunCount}`);
+  }
+
+  if (options.verbose && summary.roleAgents) {
+    lines.push(...formatRoleAgents(summary.roleAgents));
+  }
+
+  lines.push(...formatFiles(summary.filesChanged));
+
+  if (options.verbose) {
+    if (summary.lastExecutionFile) {
+      lines.push(`Last execution artifact: ${summary.lastExecutionFile}`);
+    }
+
+    if (summary.lastReviewFile) {
+      lines.push(`Last review artifact: ${summary.lastReviewFile}`);
+    }
+  }
+
+  lines.push(`Artifacts: ${summary.runDir}`);
+
+  return `${lines.join("\n")}\n`;
+}
