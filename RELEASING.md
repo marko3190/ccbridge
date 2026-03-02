@@ -57,10 +57,10 @@ After publishing a release, useful next steps are:
 
 ## npm Publish
 
-`ccbridge` is published as the scoped package `@marko3190/ccbridge`, while the installed CLI command remains `ccbridge`.
+`ccbridge` is published to npm as `ccbridge-cli`, while the installed CLI command remains `ccbridge`.
 
 Example:
 
 ```bash
-npm publish --access=public
+npm publish
 ```

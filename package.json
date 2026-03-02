@@ -1,6 +1,6 @@
 {
-  "name": "@marko3190/ccbridge",
-  "version": "0.1.2",
+  "name": "ccbridge-cli",
+  "version": "0.1.3",
   "description": "Bridge Claude Code and Codex through a planner-critic-executor-reviewer loop.",
   "keywords": [
     "ai",
