@@ -44,7 +44,7 @@ Save it as `task.md`.
 npm start -- run \
   --preset balanced \
   --workspace /absolute/path/to/target-repo \
-  --task-file /absolute/path/to/target-repo/task.md
+  --task @/absolute/path/to/target-repo/task.md
 ```
 
 In a healthy run you will see terminal progress such as:
