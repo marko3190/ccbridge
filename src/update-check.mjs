@@ -10,7 +10,7 @@ import { ensureDir, writeJson } from "./files.mjs";
 const PACKAGE_NAME = "ccbridge-cli";
 const UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
 const UPDATE_CHECK_TIMEOUT_MS = 2500;
-const ELIGIBLE_COMMANDS = new Set(["run", "doctor", "presets"]);
+const ELIGIBLE_COMMANDS = new Set(["run", "analyze", "doctor", "presets"]);
 
 function getPackageRoot() {
   return path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");

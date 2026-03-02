@@ -84,12 +84,81 @@ function formatFiles(files = []) {
   return ["Files changed:", ...files.map((file) => `- ${file}`)];
 }
 
+function formatAnalysisList(title, values = []) {
+  if (!values?.length) {
+    return [];
+  }
+
+  return [title, ...values.map((value) => `- ${value}`)];
+}
+
 export function renderRunSummary(summary, options = {}) {
   if (!summary || typeof summary !== "object") {
     return "";
   }
 
   const lines = [];
+
+  if (summary.workflow === "analysis") {
+    switch (summary.status) {
+      case "completed":
+        lines.push("Analysis completed successfully");
+        break;
+      case "analysis_rejected":
+        lines.push("Analysis stopped: the analysis never reached approval");
+        break;
+      case "waiting_for_user":
+        lines.push("Analysis paused and needs user input");
+        break;
+      default:
+        lines.push(`Analysis status: ${summary.status}`);
+        break;
+    }
+
+    lines.push("");
+    lines.push(...formatTimingBreakdown(summary));
+    lines.push(`Analysis approved: ${yesNo(summary.approved)}`);
+    lines.push(`Analysis rounds: ${summary.roundsUsed}`);
+
+    if (summary.analysisConfidence) {
+      lines.push(`Confidence: ${summary.analysisConfidence}`);
+    }
+
+    if (summary.analysisSummary) {
+      lines.push(`Summary: ${summary.analysisSummary}`);
+    }
+
+    if (typeof summary.followUpCount === "number" && summary.followUpCount > 0) {
+      lines.push(`Follow-up questions asked: ${summary.followUpCount}`);
+    }
+
+    if (
+      typeof summary.blockingFindingsCount === "number" &&
+      summary.status !== "completed"
+    ) {
+      lines.push(`Blocking findings: ${summary.blockingFindingsCount}`);
+    }
+
+    if (options.verbose && summary.roleAgents) {
+      lines.push(...formatRoleAgents(summary.roleAgents));
+    }
+
+    lines.push(...formatAnalysisList("Recommended next steps:", summary.recommendedNextSteps));
+    lines.push(...formatAnalysisList("Open questions:", summary.openQuestions));
+
+    if (options.verbose) {
+      if (summary.lastAnalysisFile) {
+        lines.push(`Last analysis artifact: ${summary.lastAnalysisFile}`);
+      }
+
+      if (summary.lastChallengeFile) {
+        lines.push(`Last challenge artifact: ${summary.lastChallengeFile}`);
+      }
+    }
+
+    lines.push(`Artifacts: ${summary.runDir}`);
+    return `${lines.join("\n")}\n`;
+  }
 
   switch (summary.status) {
     case "completed":

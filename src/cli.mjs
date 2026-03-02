@@ -15,8 +15,10 @@ import { renderBashCompletion, renderZshCompletion } from "./completion.mjs";
 import { loadConfig } from "./config.mjs";
 import {
   answerAndResumeRun,
+  askAnalysisRun,
   continueReviewRun,
   loadRunState,
+  runAnalysis,
   resumeRun,
   runOrchestration
 } from "./orchestrator.mjs";
@@ -33,6 +35,8 @@ function printHelp() {
     "  ccbridge -v",
     "  ccbridge --version",
     "  ccbridge version",
+    "  ccbridge analyze --task \"<task>\"",
+    "  ccbridge analyze --task @task.md",
     "  ccbridge run --task \"<task>\"",
     "  ccbridge run --task @task.md",
     "  ccbridge run --task-file <path>",
@@ -42,6 +46,7 @@ function printHelp() {
     "  ccbridge completion bash",
     "  ccbridge setup zsh",
     "  ccbridge setup bash",
+    "  ccbridge ask --run <runId|runDir> --question \"<question>\"",
     "  ccbridge answer --run <runId|runDir>",
     "  ccbridge resume --run <runId|runDir>",
     "  ccbridge continue --run <runId|runDir>",
@@ -49,8 +54,11 @@ function printHelp() {
     "Options:",
     "  --config <path>        Path to ccbridge config JSON. Optional if a preset is enough.",
     "  --preset <name>        Preset role layout. Defaults to balanced.",
+    "  --from-analysis <run>  Reuse a completed analysis run as extra planning context.",
     "  --task <text|@path>    Task text, or @file to read the task from disk.",
     "  --task-file <path>     Read task from a file.",
+    "  --question <text>      Follow-up question for a completed analysis run.",
+    "  --question-file <path> Read a follow-up question from a file.",
     "  --workspace <path>     Override workspaceDir from config.",
     "  --artifacts <path>     Override artifactsDir from config.",
     "  --max-rounds <n>       Override maxPlanRounds from config.",
@@ -132,8 +140,20 @@ export function parseArgs(argv) {
         args.preset = requireOptionValue(current, next);
         index += 1;
         break;
+      case "--from-analysis":
+        args.fromAnalysis = requireOptionValue(current, next);
+        index += 1;
+        break;
       case "--task":
         args.task = requireOptionValue(current, next);
+        index += 1;
+        break;
+      case "--question":
+        args.question = requireOptionValue(current, next);
+        index += 1;
+        break;
+      case "--question-file":
+        args.questionFile = requireOptionValue(current, next);
         index += 1;
         break;
       case "--task-file":
@@ -234,6 +254,18 @@ async function resolveAnswers(args) {
   throw new Error("Provide either --answers or --answers-file.");
 }
 
+async function resolveQuestion(args) {
+  if (args.question) {
+    return args.question;
+  }
+
+  if (args.questionFile) {
+    return readFile(path.resolve(args.questionFile), "utf8");
+  }
+
+  throw new Error("Provide either --question or --question-file.");
+}
+
 async function resolveConfigPath(configPath) {
   if (configPath) {
     return configPath;
@@ -272,6 +304,44 @@ async function resolveRunPath(runArg) {
   } catch {}
 
   throw new Error(`Could not resolve run path from: ${runArg}`);
+}
+
+function buildTaskFromAnalysis(baseTask, analysisState) {
+  if (analysisState.workflow !== "analysis" || analysisState.status !== "completed") {
+    throw new Error("The selected analysis run is not a completed analysis.");
+  }
+
+  const analysis = analysisState.analysis ?? {};
+
+  return [
+    baseTask.trim(),
+    "",
+    "Analysis context from a prior ccbridge analysis run:",
+    `Run id: ${analysisState.runId}`,
+    `Summary: ${analysis.summary ?? "No summary."}`,
+    `Confidence: ${analysis.confidence ?? "unknown"}`,
+    "Confirmed findings:",
+    ...(analysis.confirmed_findings?.length
+      ? analysis.confirmed_findings.map((entry) => `- ${entry}`)
+      : ["- None."]),
+    "Likely causes:",
+    ...(analysis.likely_causes?.length
+      ? analysis.likely_causes.map((entry) => `- ${entry}`)
+      : ["- None."]),
+    "Affected areas:",
+    ...(analysis.affected_areas?.length
+      ? analysis.affected_areas.map((entry) => `- ${entry}`)
+      : ["- None."]),
+    "Open questions:",
+    ...(analysis.open_questions?.length
+      ? analysis.open_questions.map((entry) => `- ${entry}`)
+      : ["- None."]),
+    "Recommended next steps:",
+    ...(analysis.recommended_next_steps?.length
+      ? analysis.recommended_next_steps.map((entry) => `- ${entry}`)
+      : ["- None."]),
+    "Use this analysis as implementation context, but still validate the scope and plan against the current repository state."
+  ].join("\n");
 }
 
 function printPresets() {
@@ -408,12 +478,14 @@ async function main() {
 
   if (
     ![
+      "analyze",
       "run",
       "doctor",
       "presets",
       "version",
       "completion",
       "setup",
+      "ask",
       "answer",
       "resume",
       "continue"
@@ -434,6 +506,28 @@ async function main() {
 
   if (args.command === "setup") {
     await runSetup(args.shell);
+    return;
+  }
+
+  if (args.command === "ask") {
+    const runPath = await resolveRunPath(args.run);
+    const state = await loadRunState(runPath);
+    const summary = await askAnalysisRun({
+      runPath,
+      question: await resolveQuestion(args),
+      onProgress: createProgressReporter(process.stderr, {
+        roleAgents: buildRoleAgentMap(state.config)
+      })
+    });
+    if (summary.status === "waiting_for_user" && canUseInteractiveTerminal()) {
+      process.stderr.write(
+        "\nRun paused and needs your input. Opening interactive answers now.\n"
+      );
+      await runInteractiveAnswerSubcommand(runPath);
+      return;
+    }
+
+    writeSummaryWithHints(summary, { json: args.json, verbose: args.verbose });
     return;
   }
 
@@ -528,15 +622,29 @@ async function main() {
     );
   }
 
-  const task = await resolveTask(args);
+  let task = await resolveTask(args);
+
+  if (args.fromAnalysis) {
+    const analysisRunPath = await resolveRunPath(args.fromAnalysis);
+    const analysisState = await loadRunState(analysisRunPath);
+    task = buildTaskFromAnalysis(task, analysisState);
+  }
+
   const onProgress = createProgressReporter(process.stderr, {
     roleAgents: buildRoleAgentMap(config)
   });
-  const summary = await runOrchestration({
-    config,
-    task,
-    onProgress
-  });
+  const summary =
+    args.command === "analyze"
+      ? await runAnalysis({
+          config,
+          task,
+          onProgress
+        })
+      : await runOrchestration({
+          config,
+          task,
+          onProgress
+        });
   if (summary.status === "waiting_for_user" && canUseInteractiveTerminal()) {
     process.stderr.write(
       "\nRun paused and needs your input. Opening interactive answers now.\n"

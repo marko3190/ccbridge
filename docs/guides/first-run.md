@@ -57,6 +57,17 @@ Planner (Claude) round 1 started
   plan ready: 3 steps, 2 files, 1 test
 ```
 
+If you want to diagnose a problem before implementing anything, you can start with analysis instead:
+
+```bash
+npm start -- analyze \
+  --preset balanced \
+  --workspace /absolute/path/to/target-repo \
+  --task @/absolute/path/to/target-repo/task.md
+```
+
+That runs a planner/challenger loop only. It writes analysis artifacts, but it does not edit the workspace.
+
 ## 4. If The Agent Needs Clarification
 
 If the planner or another role needs a human decision, `ccbridge` pauses and asks questions in the terminal.
@@ -130,6 +141,8 @@ Common files:
 - `critique.round-N.json`
 - `execution.round-N.json`
 - `review.round-N.json`
+- `analysis.round-N.json`
+- `challenge.round-N.json`
 - `raw/*.stdout.log`
 - `raw/*.stderr.log`
 

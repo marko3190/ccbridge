@@ -222,6 +222,74 @@ export function buildPlanPrompt({
   return blocks.join("\n\n");
 }
 
+export function buildAnalysisPrompt({
+  task,
+  workspaceDir,
+  previousAnalysis,
+  challenge,
+  challengeHistory,
+  inputHistory,
+  followUpQuestions,
+  round,
+  maxAnalysisRounds
+}) {
+  const instructions = [
+    "You are the analyst agent in a multi-agent coding orchestrator.",
+    "You share the same delivery goal as the challenger: produce the most accurate, useful analysis possible.",
+    "Produce analysis only.",
+    "Do not write code, do not apply edits, and do not claim that changes were implemented.",
+    "Focus on diagnosis, confidence, evidence, alternative explanations, affected areas, and recommended next steps.",
+    "Optimize for convergence: preserve the valid core of the prior analysis and patch weak spots instead of rewriting the whole story from scratch.",
+    "Be explicit about uncertainty. If the repository does not support a strong conclusion, say so plainly.",
+    "If repository inspection reveals similar problems in additional views, endpoints, or flows, include them in affected_areas, but ask the user before turning that into a broader implementation scope recommendation when the decision is ambiguous.",
+    "Always populate revision_notes. On round 1 use an empty array. On later rounds include one entry for every blocking issue from the latest challenge, reusing the exact issue_id and explaining how it was addressed or why it remains uncertain.",
+    buildInputProtocolInstructions(),
+    "Return JSON only that matches the provided schema."
+  ].join("\n");
+
+  const blocks = [
+    section("Analyst instructions", instructions),
+    section("Workspace", workspaceDir),
+    section("Task", task)
+  ];
+
+  if (typeof round === "number") {
+    blocks.push(section("Analysis round", String(round)));
+  }
+
+  if (typeof maxAnalysisRounds === "number") {
+    blocks.push(section("Max analysis rounds", String(maxAnalysisRounds)));
+  }
+
+  if (previousAnalysis) {
+    blocks.push(section("Previous analysis", json(previousAnalysis)));
+  }
+
+  if (challenge) {
+    blocks.push(section("Challenge to address", json(challenge)));
+    blocks.push(section("Latest blocking issues", formatIssueList(challenge.blocking_issues)));
+  }
+
+  if (challengeHistory?.length) {
+    blocks.push(section("Challenge history", summarizeCritiqueHistory(challengeHistory)));
+  }
+
+  if (inputHistory?.length) {
+    blocks.push(section("Resolved user input", summarizeInputHistory(inputHistory)));
+  }
+
+  if (followUpQuestions?.length) {
+    blocks.push(
+      section(
+        "Follow-up questions from the user",
+        followUpQuestions.map((entry, index) => `${index + 1}. ${entry.question}`).join("\n")
+      )
+    );
+  }
+
+  return blocks.join("\n\n");
+}
+
 export function buildCritiquePrompt({
   task,
   workspaceDir,
@@ -285,6 +353,68 @@ export function buildCritiquePrompt({
       : section("Resolved user input", "No prior user input."),
     section("Plan under review", json(plan))
   ].join("\n\n");
+}
+
+export function buildChallengePrompt({
+  task,
+  workspaceDir,
+  analysis,
+  round,
+  maxAnalysisRounds,
+  challengeHistory,
+  inputHistory,
+  followUpQuestions
+}) {
+  const instructions = [
+    "You are the challenger agent in a multi-agent coding orchestrator.",
+    "You share the same delivery goal as the analyst: reach the most accurate, actionable analysis quickly.",
+    "Review the proposed analysis.",
+    "Do not write a replacement analysis from scratch.",
+    "Use a high bar for blocking issues.",
+    "A blocking issue should exist only when the current analysis is likely misleading, materially unsupported, misses a major alternative explanation, or would push the user toward an unsafe or unjustified implementation choice.",
+    "Do not block on wording, optional polish, or unresolved questions that are already called out honestly in the analysis.",
+    "If the right next step is a user choice about scope or priority, prefer needs_input over forcing the analyst to guess.",
+    "If the analyst handled a previous blocker well enough, do not reopen it under a new label.",
+    "Prefer reusing existing issue ids when the same blocker persists.",
+    "If the analysis is strong enough to guide a user decision or a later implementation task, approve it and move any remaining concerns to non_blocking_issues.",
+    buildInputProtocolInstructions(),
+    "Return JSON only that matches the provided schema."
+  ];
+
+  if (round > 1) {
+    instructions.push(
+      "You are reviewing a revision. Compare it against prior challenges before inventing new blockers."
+    );
+  }
+
+  if (typeof maxAnalysisRounds === "number" && round === maxAnalysisRounds) {
+    instructions.push(
+      "This is the final analysis round. Reject only for material blockers that would make the final analysis misleading or unsafe to act on."
+    );
+  }
+
+  const sections = [
+    section("Challenger instructions", instructions.join("\n")),
+    section("Workspace", workspaceDir),
+    section("Task", task),
+    section("Analysis round", String(round)),
+    section("Max analysis rounds", String(maxAnalysisRounds)),
+    challengeHistory?.length
+      ? section("Prior challenge history", summarizeCritiqueHistory(challengeHistory))
+      : section("Prior challenge history", "No prior challenges."),
+    inputHistory?.length
+      ? section("Resolved user input", summarizeInputHistory(inputHistory))
+      : section("Resolved user input", "No prior user input."),
+    followUpQuestions?.length
+      ? section(
+          "Follow-up questions from the user",
+          followUpQuestions.map((entry, index) => `${index + 1}. ${entry.question}`).join("\n")
+        )
+      : section("Follow-up questions from the user", "None."),
+    section("Analysis under review", json(analysis))
+  ];
+
+  return sections.join("\n\n");
 }
 
 export function buildExecutionPrompt({

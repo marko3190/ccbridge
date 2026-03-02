@@ -4,12 +4,22 @@ This document explains how `ccbridge` is put together and where to make changes 
 
 ## High-Level Model
 
-`ccbridge` runs a cooperative agent loop:
+`ccbridge` supports two cooperative workflows:
+
+1. analysis-first
+2. implementation
+
+The implementation workflow is:
 
 1. `planner`
 2. `critic`
 3. `executor`
 4. `reviewer`
+
+The analysis workflow reuses the same cooperative pairing, but stops before execution:
+
+1. `planner` as analyst
+2. `critic` as challenger
 
 Each role is configured independently, but the default model is:
 
@@ -47,6 +57,7 @@ Responsibilities:
 - pause for user input
 - resume from saved state
 - drive review repair loops
+- drive analysis/challenge refinement loops
 
 The orchestrator is intentionally state-machine-like rather than event-broker-based. That keeps runs debuggable and artifact-driven.
 
@@ -109,6 +120,15 @@ Typical flow:
 6. optional repair loop
 7. terminal status
 
+Analysis-first flow:
+
+1. `analyze`
+2. `challenge`
+3. optional extra analysis rounds
+4. terminal status
+5. optional follow-up questions with `ccbridge ask --run <runId>`
+6. optional later implementation with `ccbridge run --from-analysis <runId> ...`
+
 If a role needs human clarification, the run moves into `waiting_for_user` and writes:
 
 - `pending-input.json`
@@ -127,6 +147,8 @@ Important files:
 - `critique.round-N.json`
 - `execution.round-N.json`
 - `review.round-N.json`
+- `analysis.round-N.json`
+- `challenge.round-N.json`
 - `raw/<role>-<operation>.stdout.log`
 - `raw/<role>-<operation>.stderr.log`
 

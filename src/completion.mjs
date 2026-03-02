@@ -25,9 +25,11 @@ typeset -A opt_args
 local -a _ccbridge_commands
 _ccbridge_commands=(
   'version:Show the installed ccbridge version'
+  'analyze:Run a collaborative analysis without editing files'
   'run:Start a new orchestration run'
   'doctor:Run preflight checks'
   'presets:List built-in presets'
+  'ask:Add a follow-up question to a completed analysis run'
   'answer:Answer pending human input for a run'
   'resume:Resume a paused run'
   'continue:Grant one more repair loop after review exhaustion'
@@ -62,19 +64,19 @@ _ccbridge_shell_value() {
 }
 
 case "$words[2]:$prev_word" in
-  run:--preset|doctor:--preset)
+  run:--preset|analyze:--preset|doctor:--preset)
     _describe -t presets 'ccbridge preset' _ccbridge_presets
     return
     ;;
-  run:--task)
+  run:--task|analyze:--task)
     _ccbridge_task_value
     return
     ;;
-  run:--config|run:--task-file|doctor:--config|answer:--answers-file)
+  run:--config|run:--task-file|analyze:--config|analyze:--task-file|doctor:--config|answer:--answers-file|ask:--question-file)
     _ccbridge_file_value
     return
     ;;
-  run:--workspace|run:--artifacts|answer:--run|resume:--run|continue:--run)
+  run:--workspace|run:--artifacts|run:--from-analysis|analyze:--workspace|analyze:--artifacts|answer:--run|ask:--run|resume:--run|continue:--run)
     _ccbridge_dir_value
     return
     ;;
@@ -85,11 +87,33 @@ case "$words[2]:$prev_word" in
 esac
 
 case "$words[2]" in
+  analyze)
+    _arguments -C -s \\
+      '(-h --help)'{-h,--help}'[show this help]' \\
+      '--config[path to ccbridge config JSON]:config file:_files' \\
+      '--preset[preset role layout]:preset:->preset' \\
+      '--task[analysis task text or @file]:task:_ccbridge_task_value' \\
+      '--task-file[read analysis task from a file]:task file:_files' \\
+      '--workspace[override workspaceDir]:workspace:_files -/' \\
+      '--artifacts[override artifactsDir]:artifacts path:_files -/' \\
+      '--max-rounds[override max analysis rounds]:round count:' \\
+      '--skip-preflight[skip auth and binary checks before run]' \\
+      '--json[print machine-readable JSON]' \\
+      '--verbose[include extra human summary detail]' && return
+    case "$state" in
+      preset)
+        _describe -t presets 'ccbridge preset' _ccbridge_presets
+        return
+        ;;
+    esac
+    return
+    ;;
   run)
     _arguments -C -s \\
       '(-h --help)'{-h,--help}'[show this help]' \\
       '--config[path to ccbridge config JSON]:config file:_files' \\
       '--preset[preset role layout]:preset:->preset' \\
+      '--from-analysis[reuse a completed analysis run]:analysis run:_files -/' \\
       '--task[task text or @file]:task:_ccbridge_task_value' \\
       '--task-file[read task from a file]:task file:_files' \\
       '--workspace[override workspaceDir]:workspace:_files -/' \\
@@ -106,6 +130,15 @@ case "$words[2]" in
         ;;
     esac
     return
+    ;;
+  ask)
+    _arguments -s \\
+      '(-h --help)'{-h,--help}'[show this help]' \\
+      '--run[analysis run directory or run id]:run path:_files -/' \\
+      '--question[follow-up analysis question]' \\
+      '--question-file[file containing a follow-up question]:question file:_files' \\
+      '--json[print machine-readable JSON]' \\
+      '--verbose[include extra human summary detail]' && return
     ;;
   answer)
     _arguments -s \\
@@ -192,12 +225,12 @@ _ccbridge() {
   command="\${COMP_WORDS[1]}"
 
   if [[ \${COMP_CWORD} -eq 1 ]]; then
-    COMPREPLY=( $(compgen -W "version run doctor presets completion setup answer resume continue -h --help -v --version" -- "$cur") )
+    COMPREPLY=( $(compgen -W "version analyze run doctor presets completion setup ask answer resume continue -h --help -v --version" -- "$cur") )
     return 0
   fi
 
   case "$command" in
-    run)
+    analyze)
       case "$prev" in
         --preset)
           COMPREPLY=( $(compgen -W "${presetWords}" -- "$cur") )
@@ -216,7 +249,40 @@ _ccbridge() {
           ;;
       esac
 
-      COMPREPLY=( $(compgen -W "-h --help --config --preset --task --task-file --workspace --artifacts --max-rounds --max-review-rounds --skip-preflight --json --verbose" -- "$cur") )
+      COMPREPLY=( $(compgen -W "-h --help --config --preset --task --task-file --workspace --artifacts --max-rounds --skip-preflight --json --verbose" -- "$cur") )
+      return 0
+      ;;
+    run)
+      case "$prev" in
+        --preset)
+          COMPREPLY=( $(compgen -W "${presetWords}" -- "$cur") )
+          return 0
+          ;;
+        --config|--task-file)
+          COMPREPLY=( $(compgen -f -- "$cur") )
+          return 0
+          ;;
+        --workspace|--artifacts|--from-analysis)
+          COMPREPLY=( $(compgen -d -- "$cur") )
+          return 0
+          ;;
+        --task)
+          _ccbridge_task_value "$cur" && return 0
+          ;;
+      esac
+
+      COMPREPLY=( $(compgen -W "-h --help --config --preset --from-analysis --task --task-file --workspace --artifacts --max-rounds --max-review-rounds --skip-preflight --json --verbose" -- "$cur") )
+      return 0
+      ;;
+    ask)
+      case "$prev" in
+        --run|--question-file)
+          COMPREPLY=( $(compgen -f -- "$cur") )
+          return 0
+          ;;
+      esac
+
+      COMPREPLY=( $(compgen -W "-h --help --run --question --question-file --json --verbose" -- "$cur") )
       return 0
       ;;
     answer)

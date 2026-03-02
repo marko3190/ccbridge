@@ -200,6 +200,56 @@ export const critiqueSchema = {
   }
 };
 
+export const analysisSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: [
+    "summary",
+    "revision_notes",
+    "confirmed_findings",
+    "likely_causes",
+    "evidence",
+    "affected_areas",
+    "open_questions",
+    "recommended_next_steps",
+    "confidence",
+    "status"
+  ],
+  properties: {
+    summary: { type: "string" },
+    revision_notes: {
+      type: "array",
+      items: revisionNoteSchema
+    },
+    confirmed_findings: {
+      type: "array",
+      items: { type: "string" }
+    },
+    likely_causes: {
+      type: "array",
+      items: { type: "string" }
+    },
+    evidence: {
+      type: "array",
+      items: { type: "string" }
+    },
+    affected_areas: {
+      type: "array",
+      items: { type: "string" }
+    },
+    open_questions: {
+      type: "array",
+      items: { type: "string" }
+    },
+    recommended_next_steps: {
+      type: "array",
+      items: { type: "string" }
+    },
+    confidence: { enum: ["low", "medium", "high"] },
+    status: { enum: ["draft", "approved", "needs_revision"] }
+  }
+};
+
 export const executionSchema = {
   type: "object",
   additionalProperties: false,
@@ -270,6 +320,8 @@ function wrapOperationSchema(resultSchema) {
 }
 
 export const schemasByOperation = {
+  analyze: wrapOperationSchema(analysisSchema),
+  challenge: wrapOperationSchema(critiqueSchema),
   plan: wrapOperationSchema(planSchema),
   critique: wrapOperationSchema(critiqueSchema),
   execute: wrapOperationSchema(executionSchema),

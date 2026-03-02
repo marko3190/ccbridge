@@ -61,6 +61,10 @@ function wrapText(text, width) {
 
 function buildStageHeader(event, roleAgents) {
   switch (event.stage) {
+    case "analyze":
+      return `\n${formatRoleWithAgent("planner", roleAgents)} analysis round ${event.analysisRound} started\n`;
+    case "challenge":
+      return `\n${formatRoleWithAgent("critic", roleAgents)} challenge for analysis round ${event.analysisRound} started\n`;
     case "plan":
       return `\n${formatRoleWithAgent("planner", roleAgents)} round ${event.planRound} started\n`;
     case "critique":
@@ -81,8 +85,16 @@ function describeOperation(event, roleAgents) {
     return `${roleLabel} is drafting the implementation plan`;
   }
 
+  if (event.roleName === "planner" && event.operation === "analyze") {
+    return `${roleLabel} is building the analysis`;
+  }
+
   if (event.roleName === "critic" && event.operation === "critique") {
     return `${roleLabel} is checking plan risks and validation`;
+  }
+
+  if (event.roleName === "critic" && event.operation === "challenge") {
+    return `${roleLabel} is stress-testing the analysis`;
   }
 
   if (event.roleName === "executor" && event.operation === "execute") {
@@ -100,6 +112,13 @@ function describeOperation(event, roleAgents) {
 
 function buildStageSummary(event) {
   switch (event.stage) {
+    case "analyze":
+      return `  analysis ready: ${pluralize(event.fileCount, "affected area")}, ${pluralize(event.testCount, "next step")}`;
+    case "challenge":
+      if (event.approved) {
+        return `  challenge approved the analysis${event.nonBlockingCount ? ` with ${pluralize(event.nonBlockingCount, "non-blocking note")}` : ""}`;
+      }
+      return `  challenge requested changes: ${pluralize(event.blockingCount, "blocker")}${event.nonBlockingCount ? `, ${pluralize(event.nonBlockingCount, "non-blocking note")}` : ""}`;
     case "plan":
       return `  plan ready: ${pluralize(event.stepCount, "step")}, ${pluralize(event.fileCount, "file")}, ${pluralize(event.testCount, "test")}`;
     case "critique":

@@ -9,6 +9,8 @@ import {
 } from "./files.mjs";
 import { buildRoleAgentMap } from "./agent-labels.mjs";
 import {
+  buildAnalysisPrompt,
+  buildChallengePrompt,
   buildCritiquePrompt,
   buildExecutionPrompt,
   buildPlanPrompt,
@@ -118,6 +120,7 @@ async function invokeAgent({
 function createInitialState({ config, task, runId, runDir }) {
   return ensureTimingState({
     version: 1,
+    workflow: "execution",
     runId,
     runDir,
     task,
@@ -142,6 +145,29 @@ function createInitialState({ config, task, runId, runDir }) {
   });
 }
 
+function createInitialAnalysisState({ config, task, runId, runDir }) {
+  return ensureTimingState({
+    version: 1,
+    workflow: "analysis",
+    runId,
+    runDir,
+    task,
+    config,
+    startedAtMs: Date.now(),
+    completedAtMs: null,
+    status: "running",
+    stage: "analyze",
+    analysisRound: 1,
+    challengeHistory: [],
+    followUpQuestions: [],
+    inputHistory: [],
+    inputSequence: 0,
+    pendingInput: null,
+    analysis: null,
+    challenge: null
+  });
+}
+
 function recordFilesChanged(state, files = []) {
   const merged = new Set(state.allFilesChanged ?? []);
   for (const file of files) {
@@ -157,7 +183,53 @@ function buildSummary(state, extra = {}) {
   const endedAtMs = state.completedAtMs ?? Date.now();
   const totalDurationMs = Math.max(0, endedAtMs - state.startedAtMs);
 
+  if (state.workflow === "analysis") {
+    return {
+      workflow: "analysis",
+      status: state.status,
+      runId: state.runId,
+      runDir: state.runDir,
+      approved: state.challenge?.approved ?? false,
+      roundsUsed: state.analysisRound,
+      reviewRoundsUsed: 0,
+      executionStatus: null,
+      reviewVerdict: null,
+      roleAgents: buildRoleAgentMap(state.config),
+      filesChanged: [],
+      testsRunCount: 0,
+      blockingFindingsCount: state.challenge?.blocking_issues?.length ?? 0,
+      nonBlockingFindingsCount: state.challenge?.non_blocking_issues?.length ?? 0,
+      totalDurationMs,
+      roleTiming: {
+        planner: { ...state.timing.planner },
+        critic: { ...state.timing.critic },
+        executor: { ...state.timing.executor },
+        reviewer: { ...state.timing.reviewer },
+        userInputWaitMs: state.timing.userInputWaitMs
+      },
+      analysisStatus: state.analysis?.status ?? null,
+      analysisConfidence: state.analysis?.confidence ?? null,
+      analysisSummary: state.analysis?.summary ?? null,
+      recommendedNextSteps: state.analysis?.recommended_next_steps ?? [],
+      openQuestions: state.analysis?.open_questions ?? [],
+      followUpCount: state.followUpQuestions?.length ?? 0,
+      lastAnalysisFile:
+        state.analysisRound && state.analysis
+          ? path.join(state.runDir, `analysis.round-${state.analysisRound}.json`)
+          : null,
+      lastChallengeFile:
+        state.analysisRound && state.challenge
+          ? path.join(state.runDir, `challenge.round-${state.analysisRound}.json`)
+          : null,
+      pendingInputFile: state.pendingInput
+        ? path.join(state.runDir, PENDING_INPUT_FILE)
+        : null,
+      ...extra
+    };
+  }
+
   return {
+    workflow: "execution",
     status: state.status,
     runId: state.runId,
     runDir: state.runDir,
@@ -259,6 +331,33 @@ function buildPlanContext(state) {
   };
 }
 
+function buildAnalysisContext(state) {
+  return {
+    task: state.task,
+    workspaceDir: state.config.workspaceDir,
+    previousAnalysis: state.analysis,
+    challenge: state.challenge,
+    challengeHistory: state.challengeHistory,
+    inputHistory: state.inputHistory,
+    followUpQuestions: state.followUpQuestions,
+    round: state.analysisRound,
+    maxAnalysisRounds: state.config.maxPlanRounds
+  };
+}
+
+function buildChallengeContext(state) {
+  return {
+    task: state.task,
+    workspaceDir: state.config.workspaceDir,
+    analysis: state.analysis,
+    round: state.analysisRound,
+    maxAnalysisRounds: state.config.maxPlanRounds,
+    challengeHistory: state.challengeHistory,
+    inputHistory: state.inputHistory,
+    followUpQuestions: state.followUpQuestions
+  };
+}
+
 function buildCritiqueContext(state) {
   return {
     task: state.task,
@@ -311,6 +410,19 @@ function emitPlanResult(state, onProgress) {
   });
 }
 
+function emitAnalysisResult(state, onProgress) {
+  onProgress?.({
+    type: "stage_result",
+    stage: "analyze",
+    roleName: "planner",
+    analysisRound: state.analysisRound,
+    approved: state.analysis?.status === "approved",
+    summary: state.analysis?.summary ?? "",
+    fileCount: state.analysis?.affected_areas?.length ?? 0,
+    testCount: state.analysis?.recommended_next_steps?.length ?? 0
+  });
+}
+
 function emitCritiqueResult(state, onProgress) {
   onProgress?.({
     type: "stage_result",
@@ -321,6 +433,19 @@ function emitCritiqueResult(state, onProgress) {
     blockingCount: state.critique?.blocking_issues?.length ?? 0,
     nonBlockingCount: state.critique?.non_blocking_issues?.length ?? 0,
     summary: state.critique?.summary ?? ""
+  });
+}
+
+function emitChallengeResult(state, onProgress) {
+  onProgress?.({
+    type: "stage_result",
+    stage: "challenge",
+    roleName: "critic",
+    analysisRound: state.analysisRound,
+    approved: state.challenge?.approved ?? false,
+    blockingCount: state.challenge?.blocking_issues?.length ?? 0,
+    nonBlockingCount: state.challenge?.non_blocking_issues?.length ?? 0,
+    summary: state.challenge?.summary ?? ""
   });
 }
 
@@ -392,6 +517,48 @@ async function runPlanStage(state, providers, onProgress) {
   return null;
 }
 
+async function runAnalyzeStage(state, providers, onProgress) {
+  const startedAt = Date.now();
+  const context = buildAnalysisContext(state);
+  onProgress?.({
+    type: "stage_start",
+    stage: "analyze",
+    roleName: "planner",
+    analysisRound: state.analysisRound
+  });
+  const response = await invokeAgent({
+    provider: providers.planner,
+    roleName: "planner",
+    operation: "analyze",
+    prompt: buildAnalysisPrompt(context),
+    payload: context,
+    workspaceDir: state.config.workspaceDir,
+    runDir: state.runDir,
+    maxAgentCallMs: state.config.maxAgentCallMs,
+    onProgress
+  });
+  recordRoleDuration(state, "planner", Date.now() - startedAt);
+
+  if (response.response_type === "needs_input") {
+    onProgress?.({
+      type: "input_requested",
+      stage: "analyze",
+      roleName: "planner",
+      questionCount: response.input_request.questions.length
+    });
+    return pauseForInput(state, "planner", "analyze", response.input_request);
+  }
+
+  state.analysis = response.result;
+  await writeJson(path.join(state.runDir, `analysis.round-${state.analysisRound}.json`), state.analysis);
+  emitAnalysisResult(state, onProgress);
+  state.stage = "challenge";
+  state.status = "running";
+  await clearPendingInputArtifacts(state.runDir);
+  await persistState(state);
+  return null;
+}
+
 async function runCritiqueStage(state, providers, onProgress) {
   const startedAt = Date.now();
   const context = buildCritiqueContext(state);
@@ -457,6 +624,82 @@ async function runCritiqueStage(state, providers, onProgress) {
     state.stage = "plan";
   }
 
+  state.status = "running";
+  await clearPendingInputArtifacts(state.runDir);
+  await persistState(state);
+  return null;
+}
+
+async function runChallengeStage(state, providers, onProgress) {
+  const startedAt = Date.now();
+  const context = buildChallengeContext(state);
+  onProgress?.({
+    type: "stage_start",
+    stage: "challenge",
+    roleName: "critic",
+    analysisRound: state.analysisRound
+  });
+  const response = await invokeAgent({
+    provider: providers.critic,
+    roleName: "critic",
+    operation: "challenge",
+    prompt: buildChallengePrompt(context),
+    payload: context,
+    workspaceDir: state.config.workspaceDir,
+    runDir: state.runDir,
+    maxAgentCallMs: state.config.maxAgentCallMs,
+    onProgress
+  });
+  recordRoleDuration(state, "critic", Date.now() - startedAt);
+
+  if (response.response_type === "needs_input") {
+    onProgress?.({
+      type: "input_requested",
+      stage: "challenge",
+      roleName: "critic",
+      questionCount: response.input_request.questions.length
+    });
+    return pauseForInput(state, "critic", "challenge", response.input_request);
+  }
+
+  state.challenge = response.result;
+  await writeJson(
+    path.join(state.runDir, `challenge.round-${state.analysisRound}.json`),
+    state.challenge
+  );
+  state.challengeHistory.push({
+    round: state.analysisRound,
+    approved: state.challenge.approved,
+    summary: state.challenge.summary,
+    blocking_issues: state.challenge.blocking_issues,
+    non_blocking_issues: state.challenge.non_blocking_issues
+  });
+  emitChallengeResult(state, onProgress);
+
+  if (state.challenge.approved) {
+    state.analysis.status = "approved";
+    await writeJson(path.join(state.runDir, "analysis.approved.json"), state.analysis);
+    state.status = "completed";
+    state.stage = "done";
+    state.completedAtMs = Date.now();
+    await persistState(state);
+    return persistSummary(state);
+  }
+
+  if (state.analysisRound === state.config.maxPlanRounds) {
+    state.status = "analysis_rejected";
+    state.stage = "done";
+    state.completedAtMs = Date.now();
+    await persistState(state);
+    return persistSummary(state, {
+      approved: false,
+      lastAnalysisFile: path.join(state.runDir, `analysis.round-${state.analysisRound}.json`),
+      lastChallengeFile: path.join(state.runDir, `challenge.round-${state.analysisRound}.json`)
+    });
+  }
+
+  state.analysisRound += 1;
+  state.stage = "analyze";
   state.status = "running";
   await clearPendingInputArtifacts(state.runDir);
   await persistState(state);
@@ -617,6 +860,35 @@ async function continueOrchestration(state, onProgress) {
   return persistSummary(state);
 }
 
+async function continueAnalysisOrchestration(state, onProgress) {
+  const providers = buildProviders(state.config);
+
+  while (state.stage !== "done") {
+    let summary = null;
+
+    switch (state.stage) {
+      case "analyze":
+        summary = await runAnalyzeStage(state, providers, onProgress);
+        break;
+      case "challenge":
+        summary = await runChallengeStage(state, providers, onProgress);
+        break;
+      default:
+        throw new Error(`Unknown analysis stage: ${state.stage}`);
+    }
+
+    if (summary) {
+      return summary;
+    }
+
+    if (state.status === "waiting_for_user") {
+      return createInputWaitSummary(state);
+    }
+  }
+
+  return persistSummary(state);
+}
+
 async function restartFromLatestReview(state, onProgress) {
   if (state.status === "waiting_for_user") {
     throw new Error("This run is still waiting for user input. Use ccbridge answer first.");
@@ -666,6 +938,22 @@ export async function runOrchestration({ config, task, onProgress }) {
     runDir
   });
   return continueOrchestration(state, onProgress);
+}
+
+export async function runAnalysis({ config, task, onProgress }) {
+  const runId = buildRunId();
+  const runDir = path.join(config.artifactsDir, runId);
+  await ensureDir(runDir);
+  await writeText(path.join(runDir, "task.txt"), `${task}\n`);
+
+  const state = createInitialAnalysisState({ config, task, runId, runDir });
+  await persistState(state);
+  onProgress?.({
+    type: "run_started",
+    runId,
+    runDir
+  });
+  return continueAnalysisOrchestration(state, onProgress);
 }
 
 export async function loadRunState(runPath) {
@@ -782,7 +1070,9 @@ export async function answerAndResumeRun({ runPath, answers, onProgress }) {
     runDir: state.runDir,
     resumedFrom: state.stage
   });
-  return continueOrchestration(state, onProgress);
+  return state.workflow === "analysis"
+    ? continueAnalysisOrchestration(state, onProgress)
+    : continueOrchestration(state, onProgress);
 }
 
 export async function resumeRun({ runPath, onProgress }) {
@@ -804,10 +1094,53 @@ export async function resumeRun({ runPath, onProgress }) {
     runDir: state.runDir,
     resumedFrom: state.stage
   });
-  return continueOrchestration(state, onProgress);
+  return state.workflow === "analysis"
+    ? continueAnalysisOrchestration(state, onProgress)
+    : continueOrchestration(state, onProgress);
 }
 
 export async function continueReviewRun({ runPath, onProgress }) {
   const state = await loadRunState(runPath);
+  if (state.workflow === "analysis") {
+    throw new Error("Analysis runs do not support review repair continuation.");
+  }
   return restartFromLatestReview(state, onProgress);
+}
+
+export async function askAnalysisRun({ runPath, question, onProgress }) {
+  const state = await loadRunState(runPath);
+
+  if (state.workflow !== "analysis") {
+    throw new Error("The selected run is not an analysis run.");
+  }
+
+  if (state.status === "waiting_for_user") {
+    throw new Error("This analysis run is still waiting for user input. Use ccbridge answer first.");
+  }
+
+  if (state.stage !== "done" || state.status !== "completed") {
+    throw new Error("You can only ask follow-up questions on a completed analysis run.");
+  }
+
+  const followUp = {
+    id: `followup-${(state.followUpQuestions?.length ?? 0) + 1}`,
+    question
+  };
+
+  state.followUpQuestions = [...(state.followUpQuestions ?? []), followUp];
+  state.analysisRound += 1;
+  state.stage = "analyze";
+  state.status = "running";
+  state.completedAtMs = null;
+  await writeJson(path.join(state.runDir, `${followUp.id}.json`), followUp);
+  await persistState(state);
+
+  onProgress?.({
+    type: "run_resumed",
+    runId: state.runId,
+    runDir: state.runDir,
+    resumedFrom: state.stage
+  });
+
+  return continueAnalysisOrchestration(state, onProgress);
 }

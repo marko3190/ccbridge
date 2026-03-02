@@ -10,6 +10,10 @@ export class MockProvider {
 
   async run({ operation, payload }) {
     switch (operation) {
+      case "analyze":
+        return this.#wrapResult(this.#analyze(payload));
+      case "challenge":
+        return this.#wrapResult(this.#challenge(payload));
       case "plan":
         return this.#wrapResult(this.#plan(payload));
       case "critique":
@@ -82,6 +86,71 @@ export class MockProvider {
       acceptance_criteria: ["Behavior matches the task.", "Tests pass."],
       open_questions: [],
       status
+    };
+  }
+
+  #analyze(payload) {
+    const task = sanitizeTask(payload.task);
+    const status = payload.challenge?.approved
+      ? "approved"
+      : payload.challenge
+        ? "needs_revision"
+        : "draft";
+    const revisionNotes = payload.challenge
+      ? payload.challenge.blocking_issues.map((issue) => ({
+          issue_id: issue.id,
+          status: "addressed",
+          resolution: `Addressed ${issue.title.toLowerCase()} in the revised analysis.`
+        }))
+      : [];
+
+    return {
+      summary: `Analysis for task: ${task}`,
+      revision_notes: revisionNotes,
+      confirmed_findings: ["The current evidence supports one main diagnosis."],
+      likely_causes: ["The behavior is consistent with the primary hypothesis."],
+      evidence: ["Repository inspection supports the reported pattern."],
+      affected_areas: ["src/example.js"],
+      open_questions: payload.followUpQuestions?.length
+        ? []
+        : ["A real run may need one follow-up question."],
+      recommended_next_steps: [
+        "Validate the hypothesis in a targeted implementation task if the user wants code changes."
+      ],
+      confidence: payload.challenge?.approved ? "high" : "medium",
+      status
+    };
+  }
+
+  #challenge(payload) {
+    const round = payload.round ?? 1;
+    const shouldApprove = this.behavior === "always_approve" || round > 1;
+
+    return {
+      approved: shouldApprove,
+      summary: shouldApprove
+        ? "Analysis is strong enough to guide the next decision."
+        : "Analysis needs one revision to tighten evidence and recommended next steps.",
+      blocking_issues: shouldApprove
+        ? []
+        : [
+            {
+              id: "analysis-evidence",
+              title: "Evidence is too thin",
+              details: "The analysis should better connect repository evidence to the main hypothesis.",
+              suggested_fix: "Expand the evidence and likely_causes sections."
+            }
+          ],
+      non_blocking_issues: shouldApprove
+        ? []
+        : [
+            {
+              id: "analysis-follow-up",
+              title: "Could call out one follow-up question",
+              details: "The analysis could mention what to verify next if the user wants to implement a fix.",
+              suggested_fix: "Add a more explicit recommended next step."
+            }
+          ]
     };
   }
 

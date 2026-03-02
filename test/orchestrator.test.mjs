@@ -6,11 +6,15 @@ import path from "node:path";
 import { loadConfig } from "../src/config.mjs";
 import {
   answerAndResumeRun,
+  askAnalysisRun,
   continueReviewRun,
   loadRunState,
+  runAnalysis,
   runOrchestration
 } from "../src/orchestrator.mjs";
 import {
+  buildAnalysisPrompt,
+  buildChallengePrompt,
   buildCritiquePrompt,
   buildExecutionPrompt,
   buildPlanPrompt,
@@ -142,6 +146,38 @@ test("runOrchestration can pause for user input and resume after multi-select an
   assert.deepEqual(answerArtifact.answers.allowed_scopes, ["docs"]);
 });
 
+test("runAnalysis completes in mock mode and writes an analysis summary", async () => {
+  const baseDir = await mkdtemp(path.join(os.tmpdir(), "ccbridge-analysis-"));
+  const summary = await runAnalysis({
+    config: createMockConfig(baseDir),
+    task: "Analyze whether one reported UI bug should trigger a broader sweep."
+  });
+
+  assert.equal(summary.workflow, "analysis");
+  assert.equal(summary.status, "completed");
+  assert.equal(summary.approved, true);
+  assert.ok(["low", "medium", "high"].includes(summary.analysisConfidence));
+  assert.equal(summary.executionStatus, null);
+});
+
+test("askAnalysisRun continues a completed analysis with a follow-up question", async () => {
+  const baseDir = await mkdtemp(path.join(os.tmpdir(), "ccbridge-analysis-ask-"));
+  const initialSummary = await runAnalysis({
+    config: createMockConfig(baseDir),
+    task: "Analyze the first reported issue."
+  });
+
+  const followUpSummary = await askAnalysisRun({
+    runPath: initialSummary.runDir,
+    question: "Does the same reasoning apply to the compare view as well?"
+  });
+
+  assert.equal(followUpSummary.workflow, "analysis");
+  assert.equal(followUpSummary.status, "completed");
+  assert.ok(followUpSummary.roundsUsed > initialSummary.roundsUsed);
+  assert.equal(followUpSummary.followUpCount, 1);
+});
+
 test("plan prompt asks for explicit revision notes and includes critique history", () => {
   const prompt = buildPlanPrompt({
     task: "Tighten plan convergence.",
@@ -198,6 +234,24 @@ test("plan prompt asks for explicit revision notes and includes critique history
   assert.match(prompt, /ask the user whether to keep the fix narrow or widen it/);
 });
 
+test("analysis prompt asks for convergence without code changes", () => {
+  const prompt = buildAnalysisPrompt({
+    task: "Analyze the reported Firefox rendering issue.",
+    workspaceDir: "/tmp/repo",
+    previousAnalysis: null,
+    challenge: null,
+    challengeHistory: [],
+    inputHistory: [],
+    followUpQuestions: [],
+    round: 1,
+    maxAnalysisRounds: 3
+  });
+
+  assert.match(prompt, /Produce analysis only/);
+  assert.match(prompt, /Do not write code, do not apply edits/);
+  assert.match(prompt, /share the same delivery goal as the challenger/);
+});
+
 test("critique prompt emphasizes high blocking threshold and final-round convergence", () => {
   const prompt = buildCritiquePrompt({
     task: "Tighten plan convergence.",
@@ -245,6 +299,34 @@ test("critique prompt emphasizes high blocking threshold and final-round converg
   assert.match(prompt, /Approve when the plan is good enough to execute safely/);
   assert.match(prompt, /treat that as scope drift unless the widening is obviously part of the same minimal fix/);
   assert.match(prompt, /prefer needs_input over silently approving the wider scope/);
+});
+
+test("challenge prompt prefers collaboration over adversarial blocking", () => {
+  const prompt = buildChallengePrompt({
+    task: "Analyze a reported UI rendering issue.",
+    workspaceDir: "/tmp/repo",
+    analysis: {
+      summary: "Likely one CSS sizing bug.",
+      revision_notes: [],
+      confirmed_findings: [],
+      likely_causes: [],
+      evidence: [],
+      affected_areas: [],
+      open_questions: [],
+      recommended_next_steps: [],
+      confidence: "medium",
+      status: "draft"
+    },
+    round: 1,
+    maxAnalysisRounds: 3,
+    challengeHistory: [],
+    inputHistory: [],
+    followUpQuestions: []
+  });
+
+  assert.match(prompt, /share the same delivery goal as the analyst/);
+  assert.match(prompt, /Do not write a replacement analysis from scratch/);
+  assert.match(prompt, /prefer needs_input over forcing the analyst to guess/);
 });
 
 test("loadConfig can build a runnable config from a preset without a config file", async () => {

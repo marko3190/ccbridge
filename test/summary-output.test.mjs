@@ -99,3 +99,39 @@ test("renderRunSummary explains a stopped review run", () => {
   assert.match(text, /Blocking findings: 1/);
   assert.match(text, /- src\/components\/CompareView\.jsx/);
 });
+
+test("renderRunSummary shows a dedicated analysis summary", () => {
+  const text = renderRunSummary({
+    workflow: "analysis",
+    status: "completed",
+    runDir: "/tmp/demo/.runs/analysis-123",
+    approved: true,
+    roundsUsed: 2,
+    roleAgents: {
+      planner: { role: "Planner", agent: "Claude", provider: "claude-cli", model: "sonnet" },
+      critic: { role: "Critic", agent: "Codex", provider: "codex-cli", model: null }
+    },
+    totalDurationMs: 183000,
+    roleTiming: {
+      planner: { durationMs: 101000, calls: 2 },
+      critic: { durationMs: 52000, calls: 2 },
+      executor: { durationMs: 0, calls: 0 },
+      reviewer: { durationMs: 0, calls: 0 },
+      userInputWaitMs: 30000
+    },
+    analysisConfidence: "medium",
+    analysisSummary: "The repository evidence supports one main hypothesis, but implementation scope still depends on user intent.",
+    followUpCount: 1,
+    recommendedNextSteps: ["Confirm whether the fix should stay narrow or sweep related views."],
+    openQuestions: ["Does the Firefox-only symptom depend on image aspect ratios?"]
+  });
+
+  assert.match(text, /Analysis completed successfully/);
+  assert.match(text, /Total duration: 3m 3s/);
+  assert.match(text, /Analysis approved: yes/);
+  assert.match(text, /Analysis rounds: 2/);
+  assert.match(text, /Confidence: medium/);
+  assert.match(text, /Follow-up questions asked: 1/);
+  assert.match(text, /Recommended next steps:/);
+  assert.match(text, /Open questions:/);
+});

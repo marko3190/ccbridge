@@ -53,3 +53,19 @@ test("shouldOfferUpdatePrompt allows globally installed npm package in TTY", asy
 
   assert.equal(shouldPrompt, true);
 });
+
+test("shouldOfferUpdatePrompt also allows analyze runs", async () => {
+  const packageRoot = await mkdtemp(path.join(os.tmpdir(), "ccbridge-update-"));
+  await writeFile(path.join(packageRoot, "package.json"), '{"name":"ccbridge-cli"}\n', "utf8");
+
+  const shouldPrompt = await shouldOfferUpdatePrompt({
+    command: "analyze",
+    stdinIsTTY: true,
+    stdoutIsTTY: true,
+    packageName: "ccbridge-cli",
+    packageRoot,
+    env: {}
+  });
+
+  assert.equal(shouldPrompt, true);
+});

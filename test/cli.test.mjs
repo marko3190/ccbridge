@@ -30,6 +30,42 @@ test("parseArgs supports completion shell selection", () => {
   assert.equal(args.shell, "zsh");
 });
 
+test("parseArgs supports analyze and ask specific options", () => {
+  const analyzeArgs = parseArgs([
+    "node",
+    "cli.mjs",
+    "analyze",
+    "--task",
+    "@task.md",
+    "--preset",
+    "balanced"
+  ]);
+  const askArgs = parseArgs([
+    "node",
+    "cli.mjs",
+    "ask",
+    "--run",
+    "run-123",
+    "--question",
+    "What else should we verify?"
+  ]);
+  const fromAnalysisArgs = parseArgs([
+    "node",
+    "cli.mjs",
+    "run",
+    "--from-analysis",
+    "run-123",
+    "--task",
+    "@task.md"
+  ]);
+
+  assert.equal(analyzeArgs.command, "analyze");
+  assert.equal(analyzeArgs.task, "@task.md");
+  assert.equal(askArgs.command, "ask");
+  assert.equal(askArgs.question, "What else should we verify?");
+  assert.equal(fromAnalysisArgs.fromAnalysis, "run-123");
+});
+
 test("parseArgs supports version flags", () => {
   const shortArgs = parseArgs(["node", "cli.mjs", "-v"]);
   const longArgs = parseArgs(["node", "cli.mjs", "--version"]);

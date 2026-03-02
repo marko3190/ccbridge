@@ -1,6 +1,6 @@
 # ccbridge
 
-`ccbridge` is an open-source CLI orchestrator for a cooperative multi-agent coding loop:
+`ccbridge` is an open-source CLI orchestrator for cooperative multi-agent analysis and coding loops:
 
 `planner -> critic -> executor -> reviewer`
 
@@ -13,6 +13,7 @@ The default pairing is:
 
 - explicit planning rounds
 - structured critique instead of vague back-and-forth
+- analysis-only runs before you commit to implementation
 - human handoff when requirements are unclear
 - a repair loop after review
 - run artifacts you can inspect and debug
@@ -24,6 +25,7 @@ The default pairing is:
 
 It has been tested on real `claude` and `codex` CLI runs, including:
 
+- analysis-only runs with follow-up questions
 - planner questions that require human clarification
 - multi-round planning and critique
 - execution plus post-review repair rounds
@@ -179,6 +181,38 @@ npm start -- run \
 
 `--task-file` still works. `--task @path/to/file.md` is just a shorter alias for file-backed tasks.
 
+## Analysis-First Workflow
+
+If you want to diagnose a problem before editing code, start with:
+
+```bash
+ccbridge analyze \
+  --preset balanced \
+  --workspace /absolute/path/to/repo \
+  --task @./bug-analysis.md
+```
+
+`analyze` uses the planner and critic roles cooperatively, writes artifacts to `.runs/<runId>/`, and never invokes the executor or edits workspace files.
+
+If you want to continue the same topic later, ask a follow-up question against that saved analysis run:
+
+```bash
+ccbridge ask \
+  --run <runId> \
+  --question "Does the same reasoning apply to the compare view?"
+```
+
+When you are ready to implement, reuse that analysis as planning context:
+
+```bash
+ccbridge run \
+  --preset balanced \
+  --from-analysis <runId> \
+  --task @./fix-task.md
+```
+
+`run --from-analysis` does not skip planning or critique. It feeds the saved analysis into the next implementation run as extra context, and the agents still validate scope against the current repository state.
+
 ## Docs
 
 Additional documentation:
@@ -200,6 +234,21 @@ Additional documentation:
 7. The run ends as `completed`, `plan_rejected`, or `review_changes_requested`.
 
 Every run is saved to `.runs/<timestamp>/`.
+
+## What An Analysis Looks Like
+
+1. The planner produces a structured analysis.
+2. The critic challenges weak assumptions, gaps, or scope drift.
+3. If needed, the planner revises the analysis until approval or `maxPlanRounds`.
+4. The run ends as `completed`, `analysis_rejected`, or `waiting_for_user`.
+5. Follow-up questions can extend the same analysis later with `ccbridge ask --run <runId>`.
+
+Analysis runs save artifacts such as:
+
+- `analysis.round-N.json`
+- `challenge.round-N.json`
+- `summary.json`
+- `state.json`
 
 ## Presets
 
@@ -251,6 +300,12 @@ If a run stopped because the reviewer still wants changes after the allowed repa
 
 ```bash
 ccbridge continue --run <runId>
+```
+
+If you want to continue a completed analysis without implementing anything yet:
+
+```bash
+ccbridge ask --run <runId> --question "What should we verify next?"
 ```
 
 For machine-readable final output instead of the human summary:
