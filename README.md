@@ -70,6 +70,8 @@ ccbridge doctor
 
 The npm package name is `ccbridge-cli`, but the installed shell command remains `ccbridge`.
 
+When `ccbridge` is installed globally from npm, interactive terminals check for a newer npm release at most once per day. You can update immediately from that prompt or continue on the currently installed version. Set `CCBRIDGE_SKIP_UPDATE_CHECK=1` to suppress those prompts.
+
 You have two supported ways to use `ccbridge`.
 
 ### Option A: No PATH Setup

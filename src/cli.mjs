@@ -23,6 +23,7 @@ import { formatPreflightReport, runPreflight } from "./preflight.mjs";
 import { createProgressReporter } from "./progress-reporter.mjs";
 import { getPresetNames, getPresetSummaries } from "./presets.mjs";
 import { renderRunSummary } from "./summary-output.mjs";
+import { maybeHandleUpdateCheck } from "./update-check.mjs";
 
 function printHelp() {
   const lines = [
@@ -307,6 +308,13 @@ async function main() {
 
   if (args.help || !args.command) {
     printHelp();
+    return;
+  }
+
+  const restartedAfterUpdate = await maybeHandleUpdateCheck({
+    args
+  });
+  if (restartedAfterUpdate) {
     return;
   }
 
