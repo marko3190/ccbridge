@@ -46,6 +46,11 @@ test("runOrchestration completes in mock mode and writes summary", async () => {
   const summaryPath = path.join(summary.runDir, "summary.json");
   const summaryOnDisk = JSON.parse(await readFile(summaryPath, "utf8"));
   assert.equal(summaryOnDisk.status, "completed");
+  assert.equal(typeof summaryOnDisk.totalDurationMs, "number");
+  assert.ok(summaryOnDisk.roleTiming.planner.calls >= 1);
+  assert.ok(summaryOnDisk.roleTiming.critic.calls >= 1);
+  assert.ok(summaryOnDisk.roleTiming.executor.calls >= 1);
+  assert.ok(summaryOnDisk.roleTiming.reviewer.calls >= 1);
 });
 
 test("runOrchestration performs a repair round after review changes requested", async () => {
@@ -71,6 +76,7 @@ test("runOrchestration performs a repair round after review changes requested", 
 
   assert.equal(reviewRound1.verdict, "changes_requested");
   assert.equal(reviewRound2.verdict, "pass");
+  assert.ok(Array.isArray(summary.filesChanged));
 });
 
 test("continueReviewRun grants one extra repair round after review limit exhaustion", async () => {
@@ -251,7 +257,7 @@ test("loadConfig can build a runnable config from a preset without a config file
   assert.equal(config.roles.executor.provider, "codex-cli");
   assert.equal(config.roles.executor.sandbox, "workspace-write");
   assert.equal(config.workspaceDir, "/tmp/demo-workspace");
-  assert.equal(config.maxAgentCallMs, 300000);
+  assert.equal(config.maxAgentCallMs, 900000);
 });
 
 test("balanced preset gives Claude executor non-interactive validation permissions", async () => {

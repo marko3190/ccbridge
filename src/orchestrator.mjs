@@ -20,6 +20,45 @@ import { schemasByOperation } from "./schema.mjs";
 const STATE_FILE = "state.json";
 const SUMMARY_FILE = "summary.json";
 const PENDING_INPUT_FILE = "pending-input.json";
+const ROLE_NAMES = ["planner", "critic", "executor", "reviewer"];
+
+function createEmptyTimingState() {
+  return {
+    planner: { durationMs: 0, calls: 0 },
+    critic: { durationMs: 0, calls: 0 },
+    executor: { durationMs: 0, calls: 0 },
+    reviewer: { durationMs: 0, calls: 0 },
+    userInputWaitMs: 0
+  };
+}
+
+function ensureTimingState(state) {
+  if (!state.timing || typeof state.timing !== "object") {
+    state.timing = createEmptyTimingState();
+  }
+
+  for (const roleName of ROLE_NAMES) {
+    if (!state.timing[roleName] || typeof state.timing[roleName] !== "object") {
+      state.timing[roleName] = { durationMs: 0, calls: 0 };
+      continue;
+    }
+
+    state.timing[roleName].durationMs = state.timing[roleName].durationMs ?? 0;
+    state.timing[roleName].calls = state.timing[roleName].calls ?? 0;
+  }
+
+  state.timing.userInputWaitMs = state.timing.userInputWaitMs ?? 0;
+  state.startedAtMs = state.startedAtMs ?? Date.now();
+  state.completedAtMs = state.completedAtMs ?? null;
+  return state;
+}
+
+function recordRoleDuration(state, roleName, durationMs) {
+  ensureTimingState(state);
+  const entry = state.timing[roleName];
+  entry.durationMs += Math.max(0, durationMs);
+  entry.calls += 1;
+}
 
 function buildProviders(config) {
   return {
@@ -77,12 +116,14 @@ async function invokeAgent({
 }
 
 function createInitialState({ config, task, runId, runDir }) {
-  return {
+  return ensureTimingState({
     version: 1,
     runId,
     runDir,
     task,
     config,
+    startedAtMs: Date.now(),
+    completedAtMs: null,
     status: "running",
     stage: "plan",
     planRound: 1,
@@ -93,14 +134,29 @@ function createInitialState({ config, task, runId, runDir }) {
     inputSequence: 0,
     pendingInput: null,
     latestReviewToAddress: null,
+    allFilesChanged: [],
     plan: null,
     critique: null,
     execution: null,
     review: null
-  };
+  });
+}
+
+function recordFilesChanged(state, files = []) {
+  const merged = new Set(state.allFilesChanged ?? []);
+  for (const file of files) {
+    if (typeof file === "string" && file) {
+      merged.add(file);
+    }
+  }
+  state.allFilesChanged = [...merged];
 }
 
 function buildSummary(state, extra = {}) {
+  ensureTimingState(state);
+  const endedAtMs = state.completedAtMs ?? Date.now();
+  const totalDurationMs = Math.max(0, endedAtMs - state.startedAtMs);
+
   return {
     status: state.status,
     runId: state.runId,
@@ -115,10 +171,18 @@ function buildSummary(state, extra = {}) {
     reviewVerdict: state.review?.verdict ?? null,
     maxReviewRounds: state.config.maxReviewRounds,
     roleAgents: buildRoleAgentMap(state.config),
-    filesChanged: state.execution?.files_changed ?? [],
+    filesChanged: state.allFilesChanged ?? state.execution?.files_changed ?? [],
     testsRunCount: state.execution?.tests_run?.length ?? 0,
     blockingFindingsCount: state.review?.blocking_findings?.length ?? 0,
     nonBlockingFindingsCount: state.review?.non_blocking_findings?.length ?? 0,
+    totalDurationMs,
+    roleTiming: {
+      planner: { ...state.timing.planner },
+      critic: { ...state.timing.critic },
+      executor: { ...state.timing.executor },
+      reviewer: { ...state.timing.reviewer },
+      userInputWaitMs: state.timing.userInputWaitMs
+    },
     lastExecutionFile:
       state.executionAttempt && state.execution
         ? path.join(state.runDir, `execution.round-${state.executionAttempt}.json`)
@@ -135,6 +199,7 @@ function buildSummary(state, extra = {}) {
 }
 
 async function persistState(state) {
+  ensureTimingState(state);
   await writeJson(path.join(state.runDir, STATE_FILE), state);
 }
 
@@ -158,6 +223,7 @@ function createInputWaitSummary(state) {
 }
 
 async function pauseForInput(state, roleName, operation, inputRequest) {
+  ensureTimingState(state);
   state.inputSequence += 1;
   state.status = "waiting_for_user";
   state.pendingInput = {
@@ -165,6 +231,7 @@ async function pauseForInput(state, roleName, operation, inputRequest) {
     role_name: roleName,
     operation,
     stage: state.stage,
+    requestedAtMs: Date.now(),
     summary: inputRequest.summary,
     questions: inputRequest.questions
   };
@@ -284,6 +351,7 @@ function emitReviewResult(state, onProgress) {
 }
 
 async function runPlanStage(state, providers, onProgress) {
+  const startedAt = Date.now();
   const context = buildPlanContext(state);
   onProgress?.({
     type: "stage_start",
@@ -302,6 +370,7 @@ async function runPlanStage(state, providers, onProgress) {
     maxAgentCallMs: state.config.maxAgentCallMs,
     onProgress
   });
+  recordRoleDuration(state, "planner", Date.now() - startedAt);
 
   if (response.response_type === "needs_input") {
     onProgress?.({
@@ -324,6 +393,7 @@ async function runPlanStage(state, providers, onProgress) {
 }
 
 async function runCritiqueStage(state, providers, onProgress) {
+  const startedAt = Date.now();
   const context = buildCritiqueContext(state);
   onProgress?.({
     type: "stage_start",
@@ -342,6 +412,7 @@ async function runCritiqueStage(state, providers, onProgress) {
     maxAgentCallMs: state.config.maxAgentCallMs,
     onProgress
   });
+  recordRoleDuration(state, "critic", Date.now() - startedAt);
 
   if (response.response_type === "needs_input") {
     onProgress?.({
@@ -374,6 +445,7 @@ async function runCritiqueStage(state, providers, onProgress) {
   } else if (state.planRound === state.config.maxPlanRounds) {
     state.status = "plan_rejected";
     state.stage = "done";
+    state.completedAtMs = Date.now();
     await persistState(state);
     return persistSummary(state, {
       approved: false,
@@ -392,6 +464,7 @@ async function runCritiqueStage(state, providers, onProgress) {
 }
 
 async function runExecuteStage(state, providers, onProgress) {
+  const startedAt = Date.now();
   const context = buildExecutionContext(state);
   onProgress?.({
     type: "stage_start",
@@ -410,6 +483,7 @@ async function runExecuteStage(state, providers, onProgress) {
     maxAgentCallMs: state.config.maxAgentCallMs,
     onProgress
   });
+  recordRoleDuration(state, "executor", Date.now() - startedAt);
 
   if (response.response_type === "needs_input") {
     onProgress?.({
@@ -422,6 +496,7 @@ async function runExecuteStage(state, providers, onProgress) {
   }
 
   state.execution = response.result;
+  recordFilesChanged(state, state.execution?.files_changed ?? []);
   await writeJson(
     path.join(state.runDir, `execution.round-${state.executionAttempt}.json`),
     state.execution
@@ -436,6 +511,7 @@ async function runExecuteStage(state, providers, onProgress) {
 }
 
 async function runReviewStage(state, providers, onProgress) {
+  const startedAt = Date.now();
   const context = buildReviewContext(state);
   onProgress?.({
     type: "stage_start",
@@ -454,6 +530,7 @@ async function runReviewStage(state, providers, onProgress) {
     maxAgentCallMs: state.config.maxAgentCallMs,
     onProgress
   });
+  recordRoleDuration(state, "reviewer", Date.now() - startedAt);
 
   if (response.response_type === "needs_input") {
     onProgress?.({
@@ -483,6 +560,7 @@ async function runReviewStage(state, providers, onProgress) {
   if (state.review.verdict === "pass") {
     state.status = "completed";
     state.stage = "done";
+    state.completedAtMs = Date.now();
     await persistState(state);
     return persistSummary(state);
   }
@@ -490,6 +568,7 @@ async function runReviewStage(state, providers, onProgress) {
   if (state.executionAttempt > state.config.maxReviewRounds) {
     state.status = "review_changes_requested";
     state.stage = "done";
+    state.completedAtMs = Date.now();
     await persistState(state);
     return persistSummary(state);
   }
@@ -590,7 +669,7 @@ export async function runOrchestration({ config, task, onProgress }) {
 }
 
 export async function loadRunState(runPath) {
-  return readJson(path.join(runPath, STATE_FILE));
+  return ensureTimingState(await readJson(path.join(runPath, STATE_FILE)));
 }
 
 function validateAnswer(question, value) {
@@ -681,6 +760,10 @@ export async function answerAndResumeRun({ runPath, answers, onProgress }) {
     summary: state.pendingInput.summary,
     answers: normalizedAnswers
   };
+
+  if (typeof state.pendingInput.requestedAtMs === "number") {
+    state.timing.userInputWaitMs += Math.max(0, Date.now() - state.pendingInput.requestedAtMs);
+  }
 
   state.inputHistory.push(answerArtifact);
   state.pendingInput = null;

@@ -94,7 +94,7 @@ export async function runCommand({
   stdinText,
   rawLogPrefix,
   runDir,
-  timeoutMs = 300000,
+  timeoutMs = 900000,
   onProgress,
   progressContext
 }) {

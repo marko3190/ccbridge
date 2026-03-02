@@ -2,6 +2,18 @@ function yesNo(value) {
   return value ? "yes" : "no";
 }
 
+function formatDurationMs(durationMs) {
+  const totalSeconds = Math.max(0, Math.round((durationMs ?? 0) / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+
+  if (!minutes) {
+    return `${totalSeconds}s`;
+  }
+
+  return `${minutes}m ${seconds}s`;
+}
+
 function formatRoleAgents(roleAgents = {}) {
   const lines = ["Agents:"];
 
@@ -16,6 +28,51 @@ function formatRoleAgents(roleAgents = {}) {
     lines.push(`- ${entry.role}: ${entry.agent}${providerTail}${modelTail}`);
   }
 
+  return lines;
+}
+
+function formatTimingBreakdown(summary) {
+  const lines = [];
+  const roleAgents = summary.roleAgents ?? {};
+  const roleTiming = summary.roleTiming ?? {};
+
+  if (typeof summary.totalDurationMs === "number") {
+    lines.push(`Total duration: ${formatDurationMs(summary.totalDurationMs)}`);
+  }
+
+  const breakdown = [];
+  const labels = {
+    planner: "rounds",
+    critic: "rounds",
+    executor: "attempts",
+    reviewer: "passes"
+  };
+
+  for (const roleName of ["planner", "critic", "executor", "reviewer"]) {
+    const timing = roleTiming?.[roleName];
+    if (!timing || typeof timing.durationMs !== "number") {
+      continue;
+    }
+
+    const roleLabel = roleAgents?.[roleName]?.role ?? roleName;
+    const agentLabel = roleAgents?.[roleName]?.agent;
+    const displayName = agentLabel ? `${roleLabel} (${agentLabel})` : roleLabel;
+    const count = timing.calls ?? 0;
+    breakdown.push(
+      `- ${displayName}: ${count} ${labels[roleName]}, ${formatDurationMs(timing.durationMs)}`
+    );
+  }
+
+  if (typeof roleTiming.userInputWaitMs === "number" && roleTiming.userInputWaitMs > 0) {
+    breakdown.push(`- User input wait: ${formatDurationMs(roleTiming.userInputWaitMs)}`);
+  }
+
+  if (!breakdown.length) {
+    return lines;
+  }
+
+  lines.push("Agent breakdown:");
+  lines.push(...breakdown);
   return lines;
 }
 
@@ -53,6 +110,7 @@ export function renderRunSummary(summary, options = {}) {
   }
 
   lines.push("");
+  lines.push(...formatTimingBreakdown(summary));
   lines.push(`Changes implemented: ${yesNo(summary.executionStatus === "completed")}`);
   lines.push(`Plan approved: ${yesNo(summary.approved)}`);
   lines.push(`Plan rounds: ${summary.roundsUsed}`);

@@ -17,12 +17,24 @@ test("renderRunSummary shows a human-readable success summary with changed files
       executor: { role: "Executor", agent: "Claude", provider: "claude-cli", model: "sonnet" },
       reviewer: { role: "Reviewer", agent: "Codex", provider: "codex-cli", model: null }
     },
+    totalDurationMs: 492000,
+    roleTiming: {
+      planner: { durationMs: 173000, calls: 2 },
+      critic: { durationMs: 102000, calls: 2 },
+      executor: { durationMs: 128000, calls: 1 },
+      reviewer: { durationMs: 61000, calls: 1 },
+      userInputWaitMs: 28000
+    },
     filesChanged: ["src/App.jsx", "src/hooks/useFavorites.js"],
     testsRunCount: 2,
     blockingFindingsCount: 0
   });
 
   assert.match(text, /Run completed successfully/);
+  assert.match(text, /Total duration: 8m 12s/);
+  assert.match(text, /Agent breakdown:/);
+  assert.match(text, /- Planner \(Claude\): 2 rounds, 2m 53s/);
+  assert.match(text, /- User input wait: 28s/);
   assert.match(text, /Changes implemented: yes/);
   assert.match(text, /Review verdict: pass/);
   assert.match(text, /Files changed:/);
@@ -46,6 +58,14 @@ test("renderRunSummary includes role-agent mapping in verbose mode", () => {
         executor: { role: "Executor", agent: "Claude", provider: "claude-cli", model: "sonnet" },
         reviewer: { role: "Reviewer", agent: "Codex", provider: "codex-cli", model: null }
       },
+      totalDurationMs: 61000,
+      roleTiming: {
+        planner: { durationMs: 18000, calls: 1 },
+        critic: { durationMs: 12000, calls: 1 },
+        executor: { durationMs: 17000, calls: 1 },
+        reviewer: { durationMs: 14000, calls: 1 },
+        userInputWaitMs: 0
+      },
       filesChanged: ["src/App.jsx"],
       testsRunCount: 2,
       lastExecutionFile: "/tmp/demo/.runs/run-123/execution.round-1.json",
@@ -58,6 +78,7 @@ test("renderRunSummary includes role-agent mapping in verbose mode", () => {
   assert.match(text, /- Planner: Claude \[claude-cli\] model=sonnet/);
   assert.match(text, /- Critic: Codex \[codex-cli\]/);
   assert.match(text, /Last execution artifact: \/tmp\/demo\/.runs\/run-123\/execution\.round-1\.json/);
+  assert.match(text, /Total duration: 1m 1s/);
 });
 
 test("renderRunSummary explains a stopped review run", () => {

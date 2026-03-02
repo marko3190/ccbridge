@@ -278,7 +278,7 @@ Long-running agent calls are noisy on purpose. `ccbridge` prints:
 - a completion line with elapsed time
 - a short stage summary after plan, critique, execute, and review
 
-At the end of a run, `ccbridge` prints a human-readable summary by default. Use `--json` for machine-readable output or `--verbose` for extra detail such as role-to-agent mapping and artifact file paths.
+At the end of a run, `ccbridge` prints a human-readable summary by default, including total duration, per-agent timing, and changed files. Use `--json` for machine-readable output or `--verbose` for extra detail such as role-to-agent mapping and artifact file paths.
 
 That feedback is there so the terminal does not look frozen during long `claude` or `codex` calls.
 
@@ -298,7 +298,7 @@ Example config:
   "artifactsDir": ".runs",
   "maxPlanRounds": 3,
   "maxReviewRounds": 1,
-  "maxAgentCallMs": 300000,
+  "maxAgentCallMs": 900000,
   "roles": {
     "planner": {
       "provider": "claude-cli",
@@ -335,7 +335,7 @@ Notes:
 - `reviewer` checks the result after implementation and can trigger a repair pass
 - `run` performs preflight checks for `claude` and `codex` auth before starting
 - `skipGitRepoCheck` is useful when a target workspace is not a git repo
-- `maxAgentCallMs` limits a single planner / critic / executor / reviewer call before `ccbridge` times it out
+- `maxAgentCallMs` limits a single planner / critic / executor / reviewer call before `ccbridge` times it out. The default is 15 minutes, because real agent runs and repair attempts can take a while.
 - `mock` exists only for local smoke tests
 
 ## Contributing
