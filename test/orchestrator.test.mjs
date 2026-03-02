@@ -176,6 +176,12 @@ test("askAnalysisRun continues a completed analysis with a follow-up question", 
   assert.equal(followUpSummary.status, "completed");
   assert.ok(followUpSummary.roundsUsed > initialSummary.roundsUsed);
   assert.equal(followUpSummary.followUpCount, 1);
+
+  const backup = JSON.parse(
+    await readFile(path.join(initialSummary.runDir, "followup-1.state-backup.json"), "utf8")
+  );
+  assert.equal(backup.status, "completed");
+  assert.equal(backup.stage, "done");
 });
 
 test("plan prompt asks for explicit revision notes and includes critique history", () => {

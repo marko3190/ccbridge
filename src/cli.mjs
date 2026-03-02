@@ -316,7 +316,8 @@ function buildTaskFromAnalysis(baseTask, analysisState) {
   return [
     baseTask.trim(),
     "",
-    "Analysis context from a prior ccbridge analysis run:",
+    "--- BEGIN PRIOR ANALYSIS CONTEXT ---",
+    "Analysis context from a prior ccbridge analysis run.",
     `Run id: ${analysisState.runId}`,
     `Summary: ${analysis.summary ?? "No summary."}`,
     `Confidence: ${analysis.confidence ?? "unknown"}`,
@@ -340,7 +341,8 @@ function buildTaskFromAnalysis(baseTask, analysisState) {
     ...(analysis.recommended_next_steps?.length
       ? analysis.recommended_next_steps.map((entry) => `- ${entry}`)
       : ["- None."]),
-    "Use this analysis as implementation context, but still validate the scope and plan against the current repository state."
+    "Use this analysis as implementation context, but still validate the scope and plan against the current repository state.",
+    "--- END PRIOR ANALYSIS CONTEXT ---"
   ].join("\n");
 }
 

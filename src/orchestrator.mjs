@@ -1127,6 +1127,7 @@ export async function askAnalysisRun({ runPath, question, onProgress }) {
     question
   };
 
+  await writeJson(path.join(state.runDir, `${followUp.id}.state-backup.json`), state);
   state.followUpQuestions = [...(state.followUpQuestions ?? []), followUp];
   state.analysisRound += 1;
   state.stage = "analyze";

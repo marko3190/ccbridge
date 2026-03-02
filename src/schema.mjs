@@ -200,6 +200,24 @@ export const critiqueSchema = {
   }
 };
 
+export const challengeSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["approved", "summary", "blocking_issues", "non_blocking_issues"],
+  properties: {
+    approved: { type: "boolean" },
+    summary: { type: "string" },
+    blocking_issues: {
+      type: "array",
+      items: issueSchema
+    },
+    non_blocking_issues: {
+      type: "array",
+      items: issueSchema
+    }
+  }
+};
+
 export const analysisSchema = {
   type: "object",
   additionalProperties: false,
@@ -321,7 +339,7 @@ function wrapOperationSchema(resultSchema) {
 
 export const schemasByOperation = {
   analyze: wrapOperationSchema(analysisSchema),
-  challenge: wrapOperationSchema(critiqueSchema),
+  challenge: wrapOperationSchema(challengeSchema),
   plan: wrapOperationSchema(planSchema),
   critique: wrapOperationSchema(critiqueSchema),
   execute: wrapOperationSchema(executionSchema),
