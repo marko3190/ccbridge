@@ -1,6 +1,6 @@
 {
   "name": "ccbridge",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Bridge Claude Code and Codex through a planner-critic-executor-reviewer loop.",
   "keywords": [
     "ai",
