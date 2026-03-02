@@ -11,6 +11,7 @@ import {
   renderWaitingForUserHint
 } from "./answer-ui.mjs";
 import { buildRoleAgentMap } from "./agent-labels.mjs";
+import { renderBashCompletion, renderZshCompletion } from "./completion.mjs";
 import { loadConfig } from "./config.mjs";
 import {
   answerAndResumeRun,
@@ -22,6 +23,7 @@ import {
 import { formatPreflightReport, runPreflight } from "./preflight.mjs";
 import { createProgressReporter } from "./progress-reporter.mjs";
 import { getPresetNames, getPresetSummaries } from "./presets.mjs";
+import { setupShellCompletion } from "./shell-setup.mjs";
 import { renderRunSummary } from "./summary-output.mjs";
 import { maybeHandleUpdateCheck } from "./update-check.mjs";
 
@@ -29,9 +31,14 @@ function printHelp() {
   const lines = [
     "Usage:",
     "  ccbridge run --task \"<task>\"",
+    "  ccbridge run --task @task.md",
     "  ccbridge run --task-file <path>",
     "  ccbridge doctor",
     "  ccbridge presets",
+    "  ccbridge completion zsh",
+    "  ccbridge completion bash",
+    "  ccbridge setup zsh",
+    "  ccbridge setup bash",
     "  ccbridge answer --run <runId|runDir>",
     "  ccbridge resume --run <runId|runDir>",
     "  ccbridge continue --run <runId|runDir>",
@@ -39,7 +46,7 @@ function printHelp() {
     "Options:",
     "  --config <path>        Path to ccbridge config JSON. Optional if a preset is enough.",
     "  --preset <name>        Preset role layout. Defaults to balanced.",
-    "  --task <text>          Task to give the planner.",
+    "  --task <text|@path>    Task text, or @file to read the task from disk.",
     "  --task-file <path>     Read task from a file.",
     "  --workspace <path>     Override workspaceDir from config.",
     "  --artifacts <path>     Override artifactsDir from config.",
@@ -85,7 +92,17 @@ export function parseArgs(argv) {
     return args;
   }
 
-  for (let index = 3; index < argv.length; index += 1) {
+  let startIndex = 3;
+  if (
+    ["completion", "setup"].includes(args.command) &&
+    argv[3] &&
+    !argv[3].startsWith("-")
+  ) {
+    args.shell = argv[3];
+    startIndex = 4;
+  }
+
+  for (let index = startIndex; index < argv.length; index += 1) {
     const current = argv[index];
     const next = argv[index + 1];
 
@@ -158,8 +175,21 @@ export function parseArgs(argv) {
   return args;
 }
 
-async function resolveTask(args) {
+export async function resolveTask(args) {
   if (args.task) {
+    if (args.task.startsWith("@@")) {
+      return args.task.slice(1);
+    }
+
+    if (args.task.startsWith("@")) {
+      if (args.task.length === 1) {
+        throw new Error("--task @ requires a file path after @");
+      }
+
+      const taskPath = path.resolve(args.task.slice(1));
+      return readFile(taskPath, "utf8");
+    }
+
     return args.task;
   }
 
@@ -234,6 +264,38 @@ function printPresets() {
   lines.push("");
   lines.push(`Default preset: balanced`);
   process.stdout.write(`${lines.join("\n")}\n`);
+}
+
+function printCompletion(shellName) {
+  if (shellName === "zsh") {
+    process.stdout.write(renderZshCompletion());
+    return;
+  }
+
+  if (shellName === "bash") {
+    process.stdout.write(renderBashCompletion());
+    return;
+  }
+
+  if (!shellName) {
+    throw new Error(
+      "Missing shell name. Supported shells: zsh, bash"
+    );
+  }
+
+  throw new Error(`Unsupported shell for completion: ${shellName}. Supported shells: zsh, bash`);
+}
+
+async function runSetup(shellName) {
+  const result = await setupShellCompletion(shellName);
+  process.stdout.write(
+    [
+      `Configured ${result.shell} completion for ccbridge.`,
+      `Completion file: ${result.completionFile}`,
+      `Shell config updated: ${result.rcFile}`,
+      `Reload your shell or run: source ${result.rcFile}`
+    ].join("\n") + "\n"
+  );
 }
 
 function canUseInteractiveTerminal() {
@@ -318,12 +380,26 @@ async function main() {
     return;
   }
 
-  if (!["run", "doctor", "presets", "answer", "resume", "continue"].includes(args.command)) {
+  if (
+    !["run", "doctor", "presets", "completion", "answer", "resume", "continue"].includes(
+      args.command
+    )
+  ) {
     throw new Error(`Unsupported command: ${args.command}`);
   }
 
   if (args.command === "presets") {
     printPresets();
+    return;
+  }
+
+  if (args.command === "completion") {
+    printCompletion(args.shell);
+    return;
+  }
+
+  if (args.command === "setup") {
+    await runSetup(args.shell);
     return;
   }
 

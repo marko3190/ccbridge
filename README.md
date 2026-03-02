@@ -72,6 +72,25 @@ The npm package name is `ccbridge-cli`, but the installed shell command remains 
 
 When `ccbridge` is installed globally from npm, interactive terminals check for a newer npm release at most once per day. You can update immediately from that prompt or continue on the currently installed version. Set `CCBRIDGE_SKIP_UPDATE_CHECK=1` to suppress those prompts.
 
+If you use zsh or bash and want command completion, the easiest setup is:
+
+```bash
+ccbridge setup zsh
+# or
+ccbridge setup bash
+```
+
+This writes the completion file and updates your shell rc file automatically. Then reload your shell.
+
+If you prefer to wire it up manually for zsh, you can still use:
+
+```bash
+mkdir -p ~/.zsh/completions
+ccbridge completion zsh > ~/.zsh/completions/_ccbridge
+```
+
+After reloading the shell, `ccbridge <Tab>` completes commands and `--task @<Tab>` completes files.
+
 You have two supported ways to use `ccbridge`.
 
 ### Option A: No PATH Setup
@@ -87,7 +106,7 @@ Examples:
 ```bash
 npm start -- doctor
 npm start -- presets
-npm start -- run --preset balanced --workspace /absolute/path/to/repo --task-file ./task.md
+npm start -- run --preset balanced --workspace /absolute/path/to/repo --task @./task.md
 ```
 
 ### Option B: Add `ccbridge` As A Shell Command
@@ -145,7 +164,7 @@ Run against a target repo:
 ccbridge run \
   --preset balanced \
   --workspace /absolute/path/to/repo \
-  --task-file ./task.md
+  --task @./task.md
 ```
 
 Or without `npm link`:
@@ -154,8 +173,10 @@ Or without `npm link`:
 npm start -- run \
   --preset balanced \
   --workspace /absolute/path/to/repo \
-  --task-file ./task.md
+  --task @./task.md
 ```
+
+`--task-file` still works. `--task @path/to/file.md` is just a shorter alias for file-backed tasks.
 
 ## Docs
 
