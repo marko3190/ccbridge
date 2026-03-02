@@ -53,6 +53,21 @@ Requirements:
 - local `claude` CLI installed and authenticated if you want `claude-cli`
 - local `codex` CLI installed and authenticated if you want `codex-cli`
 
+### Install From npm
+
+Once published, install globally with:
+
+```bash
+npm install -g ccbridge
+```
+
+Then verify:
+
+```bash
+ccbridge --help
+ccbridge doctor
+```
+
 You have two supported ways to use `ccbridge`.
 
 ### Option A: No PATH Setup

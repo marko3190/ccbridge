@@ -2,15 +2,38 @@
   "name": "ccbridge",
   "version": "0.1.0",
   "description": "Bridge Claude Code and Codex through a planner-critic-executor-reviewer loop.",
+  "keywords": [
+    "ai",
+    "agents",
+    "claude",
+    "codex",
+    "orchestration",
+    "cli",
+    "developer-tools",
+    "llm"
+  ],
   "type": "module",
   "bin": {
     "ccbridge": "./src/cli.mjs"
   },
+  "files": [
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "start": "node ./src/cli.mjs",
     "doctor": "node ./src/cli.mjs doctor",
     "test": "node --test"
   },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/marko3190/ccbridge.git"
+  },
+  "bugs": {
+    "url": "https://github.com/marko3190/ccbridge/issues"
+  },
+  "homepage": "https://github.com/marko3190/ccbridge#readme",
   "engines": {
     "node": ">=20.0.0"
   },
