@@ -64,6 +64,7 @@ npm install -g ccbridge-cli
 Then verify:
 
 ```bash
+ccbridge --version
 ccbridge --help
 ccbridge doctor
 ```
@@ -89,7 +90,7 @@ mkdir -p ~/.zsh/completions
 ccbridge completion zsh > ~/.zsh/completions/_ccbridge
 ```
 
-After reloading the shell, `ccbridge <Tab>` completes commands and `--task @<Tab>` completes files.
+After reloading the shell, `ccbridge <Tab>` completes commands, `--preset <Tab>` completes preset names, path-like options complete files or directories, and `--task @<Tab>` completes files.
 
 You have two supported ways to use `ccbridge`.
 

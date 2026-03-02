@@ -30,6 +30,9 @@ import { maybeHandleUpdateCheck } from "./update-check.mjs";
 function printHelp() {
   const lines = [
     "Usage:",
+    "  ccbridge -v",
+    "  ccbridge --version",
+    "  ccbridge version",
     "  ccbridge run --task \"<task>\"",
     "  ccbridge run --task @task.md",
     "  ccbridge run --task-file <path>",
@@ -58,10 +61,18 @@ function printHelp() {
     "  --answers-file <path>  File containing a JSON answers map for non-interactive ccbridge answer.",
     "  --json                 Print machine-readable JSON instead of the human summary.",
     "  --verbose              Include extra detail in the human summary output.",
+    "  -v, --version          Show the installed ccbridge version.",
     "  -h, --help             Show this help."
   ];
 
   process.stdout.write(`${lines.join("\n")}\n`);
+}
+
+async function printVersion() {
+  const packageJson = JSON.parse(
+    await readFile(new URL("../package.json", import.meta.url), "utf8")
+  );
+  process.stdout.write(`v${packageJson.version}\n`);
 }
 
 function requireOptionValue(option, next) {
@@ -88,6 +99,12 @@ export function parseArgs(argv) {
 
   if (args.command === "-h" || args.command === "--help") {
     args.help = true;
+    args.command = null;
+    return args;
+  }
+
+  if (args.command === "-v" || args.command === "--version") {
+    args.version = true;
     args.command = null;
     return args;
   }
@@ -162,6 +179,10 @@ export function parseArgs(argv) {
         break;
       case "--verbose":
         args.verbose = true;
+        break;
+      case "-v":
+      case "--version":
+        args.version = true;
         break;
       case "-h":
       case "--help":
@@ -368,6 +389,11 @@ function writeSummaryWithHints(summary, options = {}) {
 async function main() {
   const args = parseArgs(process.argv);
 
+  if (args.version || args.command === "version") {
+    await printVersion();
+    return;
+  }
+
   if (args.help || !args.command) {
     printHelp();
     return;
@@ -385,6 +411,7 @@ async function main() {
       "run",
       "doctor",
       "presets",
+      "version",
       "completion",
       "setup",
       "answer",

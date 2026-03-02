@@ -30,6 +30,16 @@ test("parseArgs supports completion shell selection", () => {
   assert.equal(args.shell, "zsh");
 });
 
+test("parseArgs supports version flags", () => {
+  const shortArgs = parseArgs(["node", "cli.mjs", "-v"]);
+  const longArgs = parseArgs(["node", "cli.mjs", "--version"]);
+
+  assert.equal(shortArgs.version, true);
+  assert.equal(shortArgs.command, null);
+  assert.equal(longArgs.version, true);
+  assert.equal(longArgs.command, null);
+});
+
 test("setup command is accepted and configures shell completion", async () => {
   const homeDir = await mkdtemp(path.join(os.tmpdir(), "ccbridge-home-"));
   const cliPath = path.resolve("src/cli.mjs");
@@ -61,6 +71,22 @@ test("cli runs correctly when invoked through a symlink", async () => {
 
   assert.match(result.stdout, /Usage:/);
   assert.match(result.stdout, /ccbridge setup zsh/);
+});
+
+test("cli prints version when invoked through a symlink", async () => {
+  const tempDir = await mkdtemp(path.join(os.tmpdir(), "ccbridge-link-"));
+  const linkedCliPath = path.join(tempDir, "ccbridge");
+  await symlink(path.resolve("src/cli.mjs"), linkedCliPath);
+
+  const result = await execFile(process.execPath, [linkedCliPath, "--version"], {
+    cwd: path.resolve("."),
+    env: {
+      ...process.env,
+      CCBRIDGE_SKIP_UPDATE_CHECK: "1"
+    }
+  });
+
+  assert.match(result.stdout, /^v\d+\.\d+\.\d+\n$/);
 });
 
 test("resolveTask loads @file aliases from disk", async () => {

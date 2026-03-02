@@ -24,6 +24,7 @@ typeset -A opt_args
 
 local -a _ccbridge_commands
 _ccbridge_commands=(
+  'version:Show the installed ccbridge version'
   'run:Start a new orchestration run'
   'doctor:Run preflight checks'
   'presets:List built-in presets'
@@ -48,6 +49,18 @@ _ccbridge_task_value() {
   _message 'task text'
 }
 
+_ccbridge_file_value() {
+  _files
+}
+
+_ccbridge_dir_value() {
+  _files -/
+}
+
+_ccbridge_shell_value() {
+  _values 'shell' zsh bash
+}
+
 case "$words[2]:$prev_word" in
   run:--preset|doctor:--preset)
     _describe -t presets 'ccbridge preset' _ccbridge_presets
@@ -57,11 +70,24 @@ case "$words[2]:$prev_word" in
     _ccbridge_task_value
     return
     ;;
+  run:--config|run:--task-file|doctor:--config|answer:--answers-file)
+    _ccbridge_file_value
+    return
+    ;;
+  run:--workspace|run:--artifacts|answer:--run|resume:--run|continue:--run)
+    _ccbridge_dir_value
+    return
+    ;;
+    completion:completion|setup:setup)
+    _ccbridge_shell_value
+    return
+    ;;
 esac
 
 case "$words[2]" in
   run)
     _arguments -C -s \\
+      '(-h --help)'{-h,--help}'[show this help]' \\
       '--config[path to ccbridge config JSON]:config file:_files' \\
       '--preset[preset role layout]:preset:->preset' \\
       '--task[task text or @file]:task:_ccbridge_task_value' \\
@@ -81,16 +107,25 @@ case "$words[2]" in
     esac
     return
     ;;
-  answer|resume|continue)
+  answer)
     _arguments -s \\
+      '(-h --help)'{-h,--help}'[show this help]' \\
       '--run[run directory or run id]:run path:_files -/' \\
       '--answers[inline JSON answers map]' \\
       '--answers-file[file containing JSON answers]:answers file:_files' \\
       '--json[print machine-readable JSON]' \\
       '--verbose[include extra human summary detail]' && return
     ;;
+  resume|continue)
+    _arguments -s \\
+      '(-h --help)'{-h,--help}'[show this help]' \\
+      '--run[run directory or run id]:run path:_files -/' \\
+      '--json[print machine-readable JSON]' \\
+      '--verbose[include extra human summary detail]' && return
+    ;;
   doctor)
     _arguments -C -s \\
+      '(-h --help)'{-h,--help}'[show this help]' \\
       '--config[path to ccbridge config JSON]:config file:_files' \\
       '--preset[preset role layout]:preset:->preset' && return
     case "$state" in
@@ -101,15 +136,18 @@ case "$words[2]" in
     esac
     return
     ;;
+  version)
+    _arguments -s '(-v --version)'{-v,--version}'[show the installed version]' '(-h --help)'{-h,--help}'[show this help]' && return
+    ;;
   presets)
-    _arguments -s && return
+    _arguments -s '(-h --help)'{-h,--help}'[show this help]' && return
     ;;
   completion|setup)
-    _arguments -s '1:shell:(zsh bash)' && return
+    _arguments -s '(-h --help)'{-h,--help}'[show this help]' '1:shell:(zsh bash)' && return
     ;;
 esac
 
-_arguments -C '1:command:->command' '*::arg:->args'
+_arguments -C '(-h --help)'{-h,--help}'[show this help]' '(-v --version)'{-v,--version}'[show the installed version]' '1:command:->command' '*::arg:->args'
 
 case "$state" in
   command)
@@ -154,7 +192,7 @@ _ccbridge() {
   command="\${COMP_WORDS[1]}"
 
   if [[ \${COMP_CWORD} -eq 1 ]]; then
-    COMPREPLY=( $(compgen -W "run doctor presets completion setup answer resume continue" -- "$cur") )
+    COMPREPLY=( $(compgen -W "version run doctor presets completion setup answer resume continue -h --help -v --version" -- "$cur") )
     return 0
   fi
 
@@ -178,10 +216,10 @@ _ccbridge() {
           ;;
       esac
 
-      COMPREPLY=( $(compgen -W "--config --preset --task --task-file --workspace --artifacts --max-rounds --max-review-rounds --skip-preflight --json --verbose" -- "$cur") )
+      COMPREPLY=( $(compgen -W "-h --help --config --preset --task --task-file --workspace --artifacts --max-rounds --max-review-rounds --skip-preflight --json --verbose" -- "$cur") )
       return 0
       ;;
-    answer|resume|continue)
+    answer)
       case "$prev" in
         --run|--answers-file)
           COMPREPLY=( $(compgen -f -- "$cur") )
@@ -189,7 +227,18 @@ _ccbridge() {
           ;;
       esac
 
-      COMPREPLY=( $(compgen -W "--run --answers --answers-file --json --verbose" -- "$cur") )
+      COMPREPLY=( $(compgen -W "-h --help --run --answers --answers-file --json --verbose" -- "$cur") )
+      return 0
+      ;;
+    resume|continue)
+      case "$prev" in
+        --run)
+          COMPREPLY=( $(compgen -f -- "$cur") )
+          return 0
+          ;;
+      esac
+
+      COMPREPLY=( $(compgen -W "-h --help --run --json --verbose" -- "$cur") )
       return 0
       ;;
     doctor)
@@ -204,11 +253,19 @@ _ccbridge() {
           ;;
       esac
 
-      COMPREPLY=( $(compgen -W "--config --preset" -- "$cur") )
+      COMPREPLY=( $(compgen -W "-h --help --config --preset" -- "$cur") )
+      return 0
+      ;;
+    version)
+      COMPREPLY=( $(compgen -W "-h --help -v --version" -- "$cur") )
       return 0
       ;;
     completion|setup)
-      COMPREPLY=( $(compgen -W "zsh bash" -- "$cur") )
+      COMPREPLY=( $(compgen -W "-h --help zsh bash" -- "$cur") )
+      return 0
+      ;;
+    presets)
+      COMPREPLY=( $(compgen -W "-h --help" -- "$cur") )
       return 0
       ;;
   esac
