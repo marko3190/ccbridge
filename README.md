@@ -55,7 +55,7 @@ Requirements:
 
 ### Install From npm
 
-Once published, install globally with:
+Install globally with:
 
 ```bash
 npm install -g ccbridge-cli
