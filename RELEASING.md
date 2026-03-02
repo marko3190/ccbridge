@@ -2,6 +2,28 @@
 
 This file is a lightweight checklist for preparing releases.
 
+## Versioning
+
+`ccbridge` uses semantic versioning.
+
+- `PATCH` for bug fixes, docs fixes, packaging fixes, and small UX improvements that do not change the expected CLI or config behavior
+- `MINOR` for new user-facing features, new commands, new orchestration capabilities, or meaningful workflow changes that remain backward compatible
+- `MAJOR` for breaking changes to the CLI, config format, artifact expectations, or provider contract
+
+For normal releases, prefer bumping the version with npm so that `package.json`, the git tag, and the release version stay aligned:
+
+```bash
+npm version patch
+```
+
+or:
+
+```bash
+npm version minor
+```
+
+Use `major` only when the release intentionally breaks compatibility.
+
 ## v0.1.0 Checklist
 
 Before tagging:
