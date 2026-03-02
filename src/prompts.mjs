@@ -95,6 +95,71 @@ function buildInputProtocolInstructions() {
   ].join("\n");
 }
 
+function includesAny(text, needles) {
+  return needles.some((needle) => text.includes(needle));
+}
+
+function buildReviewChecklist({ task, plan, execution, inputHistory }) {
+  const source = JSON.stringify({
+    task,
+    plan,
+    execution,
+    inputHistory
+  }).toLowerCase();
+
+  const checks = [];
+
+  if (inputHistory?.length) {
+    checks.push(
+      "Verify the implementation matches the resolved user decisions exactly. Treat deviations from those decisions as reviewable, but do not reopen choices the user already settled."
+    );
+  }
+
+  if (includesAny(source, ["localstorage", "sessionstorage", "persist", "storage"])) {
+    checks.push(
+      "Inspect state hydration from persisted storage. Check invalid, stale, duplicate, oversized, or unavailable stored data instead of reviewing only the happy path."
+    );
+  }
+
+  if (
+    includesAny(source, [
+      "favorite",
+      "favorites",
+      "recent",
+      "recents",
+      "chip",
+      "chips",
+      "list",
+      "limit",
+      "max",
+      "cap"
+    ])
+  ) {
+    checks.push(
+      "Inspect add, remove, select, deduplication, and limit behavior for user-managed lists. Call out silent failures when the UI ignores a user action without feedback."
+    );
+  }
+
+  if (includesAny(source, ["fetch", "loading", "request", "retry", "debounce", "search", "geolocation"])) {
+    checks.push(
+      "Inspect at least one non-happy-path async interaction such as repeated actions, stale responses, or loading/error transitions."
+    );
+  }
+
+  if (!checks.length) {
+    return null;
+  }
+
+  return section(
+    "Targeted review checklist",
+    [
+      "Use these checks as coverage guidance, not as automatic blockers.",
+      "Request changes only when a checklist issue materially affects correctness, validation, regressions, or adherence to resolved user decisions.",
+      ...checks.map((check) => `- ${check}`)
+    ].join("\n")
+  );
+}
+
 export function buildPlanPrompt({
   task,
   workspaceDir,
@@ -297,6 +362,7 @@ export function buildReviewPrompt({
     "Ignore nits unless they materially impact correctness or maintainability.",
     "If a prior blocking finding has been fixed, do not reopen it under a new label.",
     "Use blocking findings only for issues that should be fixed before considering the task complete.",
+    "Do not limit review to the happy path when the change introduces persistence, user-controlled lists, limits, or async interactions.",
     buildInputProtocolInstructions(),
     "Return JSON only that matches the provided schema."
   ];
@@ -325,6 +391,11 @@ export function buildReviewPrompt({
     section("Review round", String(reviewRound)),
     section("Max review repair rounds", String(maxReviewRounds))
   ];
+
+  const checklistSection = buildReviewChecklist({ task, plan, execution, inputHistory });
+  if (checklistSection) {
+    sections.push(checklistSection);
+  }
 
   if (reviewHistory?.length) {
     sections.push(section("Prior review history", summarizeReviewHistory(reviewHistory)));

@@ -4,7 +4,12 @@ import { mkdtemp, readFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { loadConfig } from "../src/config.mjs";
-import { answerAndResumeRun, loadRunState, runOrchestration } from "../src/orchestrator.mjs";
+import {
+  answerAndResumeRun,
+  continueReviewRun,
+  loadRunState,
+  runOrchestration
+} from "../src/orchestrator.mjs";
 import { buildCritiquePrompt, buildPlanPrompt, buildReviewPrompt } from "../src/prompts.mjs";
 
 function createMockConfig(baseDir) {
@@ -61,6 +66,36 @@ test("runOrchestration performs a repair round after review changes requested", 
 
   assert.equal(reviewRound1.verdict, "changes_requested");
   assert.equal(reviewRound2.verdict, "pass");
+});
+
+test("continueReviewRun grants one extra repair round after review limit exhaustion", async () => {
+  const baseDir = await mkdtemp(path.join(os.tmpdir(), "ccbridge-continue-"));
+  const config = createMockConfig(baseDir);
+  config.roles.reviewer = { provider: "mock", behavior: "request_changes_twice" };
+
+  const stoppedSummary = await runOrchestration({
+    config,
+    task: "Exercise continue after exhausted review repair rounds."
+  });
+
+  assert.equal(stoppedSummary.status, "review_changes_requested");
+  assert.equal(stoppedSummary.reviewVerdict, "changes_requested");
+  assert.equal(stoppedSummary.reviewRoundsUsed, 2);
+  assert.equal(stoppedSummary.maxReviewRounds, 1);
+
+  const finalSummary = await continueReviewRun({
+    runPath: stoppedSummary.runDir
+  });
+
+  assert.equal(finalSummary.status, "completed");
+  assert.equal(finalSummary.reviewVerdict, "pass");
+  assert.equal(finalSummary.reviewRoundsUsed, 3);
+  assert.equal(finalSummary.maxReviewRounds, 2);
+
+  const reviewRound3 = JSON.parse(
+    await readFile(path.join(stoppedSummary.runDir, "review.round-3.json"), "utf8")
+  );
+  assert.equal(reviewRound3.verdict, "pass");
 });
 
 test("runOrchestration can pause for user input and resume after multi-select answers", async () => {
@@ -250,4 +285,52 @@ test("review prompt marks the final allowed review pass correctly", () => {
   });
 
   assert.match(prompt, /This is the final allowed review pass/);
+});
+
+test("review prompt adds a soft targeted checklist for persistence and resolved user decisions", () => {
+  const prompt = buildReviewPrompt({
+    task: "Add favorite cities with localStorage persistence and a max limit.",
+    workspaceDir: "/tmp/repo",
+    plan: {
+      goal: "Goal",
+      revision_notes: [],
+      assumptions: [],
+      steps: ["Persist favorites in localStorage", "Show favorite chips below the search bar"],
+      files_to_touch: ["src/App.jsx", "src/hooks/useFavorites.js"],
+      risks: ["localStorage can contain invalid data"],
+      tests: ["Add hook tests for duplicate and max-limit behavior"],
+      acceptance_criteria: [],
+      open_questions: [],
+      status: "approved"
+    },
+    execution: {
+      status: "completed",
+      summary: "Added favorites with localStorage and chip selection.",
+      files_changed: ["src/App.jsx", "src/hooks/useFavorites.js"],
+      tests_run: [],
+      plan_deviations: [],
+      follow_up: []
+    },
+    reviewRound: 1,
+    maxReviewRounds: 1,
+    reviewHistory: [],
+    inputHistory: [
+      {
+        stage: "plan",
+        role_name: "planner",
+        summary: "User selected favorite cities, localStorage persistence, and a max of 5.",
+        answers: {
+          saved_list_kind: "favorites",
+          persistence: "localstorage",
+          max_favorites: "5"
+        }
+      }
+    ]
+  });
+
+  assert.match(prompt, /Targeted review checklist/);
+  assert.match(prompt, /coverage guidance, not as automatic blockers/);
+  assert.match(prompt, /matches the resolved user decisions exactly/);
+  assert.match(prompt, /hydration from persisted storage/);
+  assert.match(prompt, /silent failures when the UI ignores a user action without feedback/);
 });

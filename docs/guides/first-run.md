@@ -90,7 +90,7 @@ Possible terminal statuses:
 
 - `completed`: run finished successfully
 - `plan_rejected`: plan never reached approval
-- `review_changes_requested`: execution happened, but review still found a blocking issue after the allowed repair passes
+- `review_changes_requested`: execution happened, but review still found a blocking issue after the allowed repair passes. You can grant one more repair cycle with `npm start -- continue --run <runId>`
 - `waiting_for_user`: human input is required before continuing
 
 ## 6. Inspect Artifacts

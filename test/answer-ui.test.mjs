@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   collectAnswers,
   normalizeInteractiveAnswer,
+  renderContinueHint,
   renderWaitingForUserHint
 } from "../src/answer-ui.mjs";
 
@@ -105,4 +106,15 @@ test("renderWaitingForUserHint shows the interactive next step", () => {
   assert.match(message, /Run paused: planner needs input during plan/);
   assert.match(message, /Answer them interactively with/);
   assert.match(message, /ccbridge answer --run 2026-03-01T20-25-50.035Z/);
+});
+
+test("renderContinueHint shows the next repair step after review limit exhaustion", () => {
+  const message = renderContinueHint({
+    status: "review_changes_requested",
+    runId: "2026-03-01T23-22-16.527Z",
+    runDir: "/tmp/demo/.runs/2026-03-01T23-22-16.527Z"
+  });
+
+  assert.match(message, /reviewer still requested changes/);
+  assert.match(message, /ccbridge continue --run 2026-03-01T23-22-16.527Z/);
 });

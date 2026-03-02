@@ -237,3 +237,20 @@ export function renderWaitingForUserHint(summary) {
 
   return `${lines.join("\n")}\n`;
 }
+
+export function renderContinueHint(summary) {
+  if (summary?.status !== "review_changes_requested") {
+    return "";
+  }
+
+  const lines = [
+    "",
+    "Run stopped because the reviewer still requested changes after the allowed repair rounds.",
+    "Continue with one more repair round using:",
+    `  ccbridge continue --run ${summary.runId}`,
+    "Or from this repo without npm link:",
+    `  npm start -- continue --run ${summary.runDir}`
+  ];
+
+  return `${lines.join("\n")}\n`;
+}

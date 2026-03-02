@@ -108,7 +108,8 @@ Additional documentation:
 3. If required, the planner revises the plan until approval or `maxPlanRounds`.
 4. The executor implements the approved plan.
 5. The reviewer checks the result and can request a repair pass.
-6. The run ends as `completed`, `plan_rejected`, or `review_changes_requested`.
+6. If repair rounds are exhausted, you can explicitly continue from the latest review without restarting the whole run.
+7. The run ends as `completed`, `plan_rejected`, or `review_changes_requested`.
 
 Every run is saved to `.runs/<timestamp>/`.
 
@@ -156,6 +157,12 @@ If a run was interrupted after input was already recorded:
 
 ```bash
 ccbridge resume --run <runId>
+```
+
+If a run stopped because the reviewer still wants changes after the allowed repair passes:
+
+```bash
+ccbridge continue --run <runId>
 ```
 
 Current behavior is human handoff only. `ccbridge` does not let one agent invent product decisions on behalf of the user.
@@ -308,6 +315,14 @@ If you already answered the questions and the process was interrupted, continue 
 
 ```bash
 ccbridge resume --run <runId>
+```
+
+### Run stopped with `review_changes_requested`
+
+This means the latest review still found a blocking issue after the currently allowed repair rounds. To grant one more `executor -> reviewer` cycle without restarting planning:
+
+```bash
+ccbridge continue --run <runId>
 ```
 
 ### Binary not found (ENOENT)

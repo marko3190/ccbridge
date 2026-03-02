@@ -6,11 +6,13 @@ import process from "node:process";
 import { access, readFile } from "node:fs/promises";
 import {
   promptForAnswersInteractively,
+  renderContinueHint,
   renderWaitingForUserHint
 } from "./answer-ui.mjs";
 import { loadConfig } from "./config.mjs";
 import {
   answerAndResumeRun,
+  continueReviewRun,
   loadRunState,
   resumeRun,
   runOrchestration
@@ -27,6 +29,7 @@ function printHelp() {
     "  ccbridge presets",
     "  ccbridge answer --run <runId|runDir>",
     "  ccbridge resume --run <runId|runDir>",
+    "  ccbridge continue --run <runId|runDir>",
     "",
     "Options:",
     "  --config <path>        Path to ccbridge config JSON. Optional if a preset is enough.",
@@ -221,6 +224,11 @@ function createProgressReporter(output = process.stderr) {
       case "run_resumed":
         output.write(`\nResuming run ${event.runId} at stage ${event.resumedFrom}\n`);
         break;
+      case "run_continued":
+        output.write(
+          `\nContinuing run ${event.runId} with one extra repair round (attempt ${event.nextExecutionAttempt}, max repair rounds now ${event.maxReviewRounds})\n`
+        );
+        break;
       case "stage_start":
         if (event.stage === "plan") {
           output.write(`\nPlanner round ${event.planRound} started\n`);
@@ -321,7 +329,7 @@ async function main() {
     return;
   }
 
-  if (!["run", "doctor", "presets", "answer", "resume"].includes(args.command)) {
+  if (!["run", "doctor", "presets", "answer", "resume", "continue"].includes(args.command)) {
     throw new Error(`Unsupported command: ${args.command}`);
   }
 
@@ -349,6 +357,9 @@ async function main() {
     if (summary.status === "waiting_for_user") {
       process.stderr.write(renderWaitingForUserHint(summary));
     }
+    if (summary.status === "review_changes_requested") {
+      process.stderr.write(renderContinueHint(summary));
+    }
     return;
   }
 
@@ -369,6 +380,33 @@ async function main() {
     process.stdout.write(`${JSON.stringify(summary, null, 2)}\n`);
     if (summary.status === "waiting_for_user") {
       process.stderr.write(renderWaitingForUserHint(summary));
+    }
+    if (summary.status === "review_changes_requested") {
+      process.stderr.write(renderContinueHint(summary));
+    }
+    return;
+  }
+
+  if (args.command === "continue") {
+    const runPath = await resolveRunPath(args.run);
+    const summary = await continueReviewRun({
+      runPath,
+      onProgress: createProgressReporter()
+    });
+    if (summary.status === "waiting_for_user" && canUseInteractiveTerminal()) {
+      process.stderr.write(
+        "\nRun paused and needs your input. Opening interactive answers now.\n"
+      );
+      await runInteractiveAnswerSubcommand(runPath);
+      return;
+    }
+
+    process.stdout.write(`${JSON.stringify(summary, null, 2)}\n`);
+    if (summary.status === "waiting_for_user") {
+      process.stderr.write(renderWaitingForUserHint(summary));
+    }
+    if (summary.status === "review_changes_requested") {
+      process.stderr.write(renderContinueHint(summary));
     }
     return;
   }
@@ -417,6 +455,9 @@ async function main() {
   process.stdout.write(`${JSON.stringify(summary, null, 2)}\n`);
   if (summary.status === "waiting_for_user") {
     process.stderr.write(renderWaitingForUserHint(summary));
+  }
+  if (summary.status === "review_changes_requested") {
+    process.stderr.write(renderContinueHint(summary));
   }
 }
 

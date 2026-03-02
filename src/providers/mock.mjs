@@ -137,6 +137,7 @@ export class MockProvider {
   #review(payload) {
     const reviewRound = payload.reviewRound ?? 1;
     const requestChangesOnce = this.behavior === "request_changes_once";
+    const requestChangesTwice = this.behavior === "request_changes_twice";
 
     if (requestChangesOnce && reviewRound === 1) {
       return {
@@ -147,6 +148,22 @@ export class MockProvider {
             id: "mock-finding",
             title: "Mock blocking finding",
             details: "Add one follow-up adjustment before considering the task complete.",
+            file: "README.md"
+          }
+        ],
+        non_blocking_findings: []
+      };
+    }
+
+    if (requestChangesTwice && reviewRound <= 2) {
+      return {
+        verdict: "changes_requested",
+        summary: "Mock reviewer requests two repair rounds before approval.",
+        blocking_findings: [
+          {
+            id: `mock-finding-${reviewRound}`,
+            title: `Mock blocking finding ${reviewRound}`,
+            details: "Add one more follow-up adjustment before considering the task complete.",
             file: "README.md"
           }
         ],

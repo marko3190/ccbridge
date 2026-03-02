@@ -110,6 +110,7 @@ function buildSummary(state, extra = {}) {
         : state.executionAttempt,
     executionStatus: state.execution?.status ?? null,
     reviewVerdict: state.review?.verdict ?? null,
+    maxReviewRounds: state.config.maxReviewRounds,
     lastExecutionFile:
       state.executionAttempt && state.execution
         ? path.join(state.runDir, `execution.round-${state.executionAttempt}.json`)
@@ -469,6 +470,38 @@ async function continueOrchestration(state, onProgress) {
   return persistSummary(state);
 }
 
+async function restartFromLatestReview(state, onProgress) {
+  if (state.status === "waiting_for_user") {
+    throw new Error("This run is still waiting for user input. Use ccbridge answer first.");
+  }
+
+  if (state.status !== "review_changes_requested" || state.stage !== "done") {
+    throw new Error("This run is not paused after exhausted review repair rounds.");
+  }
+
+  if (state.review?.verdict !== "changes_requested") {
+    throw new Error("This run does not have a pending review change request to continue from.");
+  }
+
+  state.config.maxReviewRounds += 1;
+  state.latestReviewToAddress = state.review;
+  state.executionAttempt += 1;
+  state.stage = "execute";
+  state.status = "running";
+  await clearPendingInputArtifacts(state.runDir);
+  await persistState(state);
+
+  onProgress?.({
+    type: "run_continued",
+    runId: state.runId,
+    runDir: state.runDir,
+    nextExecutionAttempt: state.executionAttempt,
+    maxReviewRounds: state.config.maxReviewRounds
+  });
+
+  return continueOrchestration(state, onProgress);
+}
+
 export async function runOrchestration({ config, task, onProgress }) {
   const runId = buildRunId();
   const runDir = path.join(config.artifactsDir, runId);
@@ -618,4 +651,9 @@ export async function resumeRun({ runPath, onProgress }) {
     resumedFrom: state.stage
   });
   return continueOrchestration(state, onProgress);
+}
+
+export async function continueReviewRun({ runPath, onProgress }) {
+  const state = await loadRunState(runPath);
+  return restartFromLatestReview(state, onProgress);
 }
